@@ -190,10 +190,10 @@
 
 <header id="cabecalho" class="hidden sticky z-30 border-b border-banca-muted/15 dark:border-banca-mutedDark/15 bg-banca-paper/90 dark:bg-banca-ink/90 backdrop-blur" style="top: env(safe-area-inset-top, 0px);">
   <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-    <div class="flex items-baseline gap-2">
+    <button id="btn-logo-home" class="flex items-baseline gap-2" title="Voltar ao painel">
       <h1 class="font-serif text-xl">Banca</h1>
       <span class="hidden sm:inline text-xs text-banca-muted dark:text-banca-mutedDark">revisão ativa para concursos</span>
-    </div>
+    </button>
     <div class="flex items-center gap-1">
       <button id="btn-progresso" class="botao-secundario !py-1.5 !px-3 text-sm">Progresso</button>
       <button id="btn-importar" class="botao-secundario !py-1.5 !px-3 text-sm">Importar CSV</button>
@@ -1253,6 +1253,12 @@ document.addEventListener('keydown', (e) => {
 // ======================================================================
 // IMPORTADOR DE CSV
 // ======================================================================
+$('#btn-logo-home').addEventListener('click', () => {
+  if (estado.estudo) return; // não sai de sessão de estudo em andamento sem usar "Encerrar sessão"
+  mostrarView('dashboard');
+  carregarDashboard();
+});
+
 $('#btn-progresso').addEventListener('click', () => {
   mostrarView('progress');
   renderizarProgresso();
