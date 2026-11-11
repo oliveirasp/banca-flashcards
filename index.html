@@ -315,6 +315,10 @@
         <label class="block text-xs mb-1 text-banca-muted dark:text-banca-mutedDark">Descrição (opcional)</label>
         <textarea id="nc-descricao" rows="2" class="campo"></textarea>
       </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" id="nc-compartilhado" checked>
+        Compartilhado (visível para todos os usuários)
+      </label>
       <div class="flex gap-2 justify-end pt-2">
         <button type="button" class="botao-secundario fechar-modal">Cancelar</button>
         <button type="submit" class="botao-primario">Criar</button>
@@ -720,7 +724,10 @@ function renderizarDashboard() {
       <section class="border-t border-banca-muted/15 dark:border-banca-mutedDark/15 pt-6 pb-2">
         <div class="flex items-baseline justify-between mb-2 gap-3">
           <div class="min-w-0">
-            <h2 class="font-serif text-2xl truncate">${escapeHtmlPlano(concurso.nome)}</h2>
+            <h2 class="font-serif text-2xl truncate inline-flex items-center gap-2">
+              ${escapeHtmlPlano(concurso.nome)}
+              ${!concurso.compartilhado ? '<span class="text-[11px] font-sans font-normal px-1.5 py-0.5 rounded border border-banca-muted/30 dark:border-banca-mutedDark/30 text-banca-muted dark:text-banca-mutedDark align-middle">privado</span>' : ''}
+            </h2>
             ${concurso.descricao ? `<p class="text-sm text-banca-muted dark:text-banca-mutedDark">${escapeHtmlPlano(concurso.descricao)}</p>` : ''}
           </div>
           <div class="flex items-center gap-3 text-sm shrink-0">
@@ -766,9 +773,10 @@ $('#form-novo-concurso').addEventListener('submit', async (e) => {
   e.preventDefault();
   const nome = $('#nc-nome').value.trim();
   const descricao = $('#nc-descricao').value.trim();
+  const compartilhado = $('#nc-compartilhado').checked;
   mostrarCarregando(true);
   try {
-    const { data, error } = await supabaseClient.from('concursos').insert({ nome, descricao: descricao || null, criado_por: estado.usuario.id }).select().single();
+    const { data, error } = await supabaseClient.from('concursos').insert({ nome, descricao: descricao || null, compartilhado, criado_por: estado.usuario.id }).select().single();
     if (error) throw error;
     estado.concursos.push(data);
     renderizarDashboard();
