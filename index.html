@@ -58,6 +58,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.1/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 
 <style>
   :root {
@@ -258,10 +259,45 @@
   <!-- ===================== PROGRESSO ===================== -->
   <section id="view-progress" class="hidden max-w-3xl mx-auto px-4 py-8 pb-24">
     <h2 class="font-serif text-2xl mb-1">Seu progresso</h2>
-    <p class="text-sm text-banca-muted dark:text-banca-mutedDark mb-6">Quanto de cada matéria você já domina, está aprendendo ou ainda nem viu.</p>
-    <div id="lista-progresso"></div>
-    <div id="progresso-vazio" class="hidden text-center py-16 text-banca-muted dark:text-banca-mutedDark">
-      <p>Nenhum concurso cadastrado ainda.</p>
+    <p class="text-sm text-banca-muted dark:text-banca-mutedDark mb-4">Quanto de cada matéria você já domina, está aprendendo ou ainda nem viu.</p>
+
+    <div class="flex text-sm mb-6 border-b border-banca-muted/15 dark:border-banca-mutedDark/15">
+      <button data-aba-progresso="geral" class="aba-progresso flex-1 pb-2 font-medium border-b-2 border-banca-accent text-banca-accent">Visão geral</button>
+      <button data-aba-progresso="calendario" class="aba-progresso flex-1 pb-2 font-medium border-b-2 border-transparent text-banca-muted dark:text-banca-mutedDark">Calendário</button>
+    </div>
+
+    <div id="painel-progresso-geral">
+      <div id="lista-progresso"></div>
+      <div id="progresso-vazio" class="hidden text-center py-16 text-banca-muted dark:text-banca-mutedDark">
+        <p>Nenhum concurso cadastrado ainda.</p>
+      </div>
+    </div>
+
+    <div id="painel-progresso-calendario" class="hidden">
+      <div class="flex items-center justify-between mb-4">
+        <button id="cal-mes-anterior" class="icon-btn" aria-label="Mês anterior">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span id="cal-titulo-mes" class="font-serif text-lg"></span>
+        <button id="cal-mes-proximo" class="icon-btn" aria-label="Próximo mês">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+      <div id="cal-grade" class="grid grid-cols-7 gap-1 text-center text-xs mb-2"></div>
+      <div id="cal-detalhe-dia" class="hidden mt-4 p-4 rounded-md border border-banca-muted/15 dark:border-banca-mutedDark/15"></div>
+
+      <div class="mt-8 pt-6 border-t border-banca-muted/15 dark:border-banca-mutedDark/15">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-serif text-lg">Evolução</h3>
+          <div class="flex gap-1">
+            <button data-periodo="7" class="periodo-evolucao botao-secundario !py-1 !px-2.5 text-xs">7 dias</button>
+            <button data-periodo="30" class="periodo-evolucao botao-secundario !py-1 !px-2.5 text-xs !bg-banca-accent !text-white">30 dias</button>
+            <button data-periodo="90" class="periodo-evolucao botao-secundario !py-1 !px-2.5 text-xs">90 dias</button>
+          </div>
+        </div>
+        <canvas id="grafico-evolucao" height="140"></canvas>
+        <div id="evolucao-por-materia" class="mt-6 space-y-2"></div>
+      </div>
     </div>
   </section>
 
@@ -1282,6 +1318,215 @@ function renderizarProgresso() {
       <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-banca-amber dark:bg-banca-amberDark"></span>Aprendendo</span>
       <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-banca-muted/30 dark:bg-banca-mutedDark/30"></span>Ainda não visto</span>
     </div>`;
+}
+
+// ======================================================================
+// CALENDÁRIO E EVOLUÇÃO
+// ======================================================================
+const hoje = new Date();
+estado.calAno = hoje.getFullYear();
+estado.calMes = hoje.getMonth(); // 0-11
+estado.periodoEvolucao = 30;
+let graficoEvolucaoInstancia = null;
+
+$$('.aba-progresso').forEach(botao => botao.addEventListener('click', () => {
+  const alvo = botao.dataset.abaProgresso;
+  $$('.aba-progresso').forEach(b => {
+    const ativo = b === botao;
+    b.classList.toggle('border-banca-accent', ativo);
+    b.classList.toggle('text-banca-accent', ativo);
+    b.classList.toggle('border-transparent', !ativo);
+    b.classList.toggle('text-banca-muted', !ativo);
+  });
+  $('#painel-progresso-geral').classList.toggle('hidden', alvo !== 'geral');
+  $('#painel-progresso-calendario').classList.toggle('hidden', alvo !== 'calendario');
+  if (alvo === 'calendario') {
+    renderizarCalendario();
+    renderizarEvolucao();
+  }
+}));
+
+function chaveDia(data) {
+  // chave local YYYY-MM-DD, evitando problemas de fuso com toISOString
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+}
+
+async function renderizarCalendario() {
+  const inicioMes = new Date(estado.calAno, estado.calMes, 1);
+  const fimMes = new Date(estado.calAno, estado.calMes + 1, 1);
+  $('#cal-titulo-mes').textContent = inicioMes.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  $('#cal-detalhe-dia').classList.add('hidden');
+
+  let linhas = [];
+  try {
+    const { data, error } = await supabaseClient.from('historico_revisoes')
+      .select('nota, criado_em, baralho_id')
+      .eq('user_id', estado.usuario.id)
+      .gte('criado_em', inicioMes.toISOString())
+      .lt('criado_em', fimMes.toISOString());
+    if (error) throw error;
+    linhas = data;
+  } catch (err) {
+    mostrarToast('Erro ao carregar calendário: ' + err.message, 'erro');
+  }
+
+  const porDia = new Map();
+  for (const l of linhas) {
+    const chave = chaveDia(new Date(l.criado_em));
+    if (!porDia.has(chave)) porDia.set(chave, []);
+    porDia.get(chave).push(l);
+  }
+
+  const diasSemana = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+  const primeiroDiaSemana = inicioMes.getDay();
+  const totalDias = new Date(estado.calAno, estado.calMes + 1, 0).getDate();
+  const hojeChave = chaveDia(new Date());
+
+  let celulas = diasSemana.map(d => `<div class="text-banca-muted dark:text-banca-mutedDark font-medium pb-1">${d}</div>`).join('');
+  for (let i = 0; i < primeiroDiaSemana; i++) celulas += '<div></div>';
+  for (let dia = 1; dia <= totalDias; dia++) {
+    const dataDia = new Date(estado.calAno, estado.calMes, dia);
+    const chave = chaveDia(dataDia);
+    const registros = porDia.get(chave) || [];
+    const intensidade = registros.length === 0 ? '' : registros.length < 5 ? 'bg-banca-accent/20' : registros.length < 15 ? 'bg-banca-accent/50' : 'bg-banca-accent text-white';
+    const souHoje = chave === hojeChave ? 'ring-1 ring-banca-accent' : '';
+    celulas += `
+      <button data-dia="${chave}" class="aspect-square rounded-md flex items-center justify-center hover:ring-1 hover:ring-banca-accent transition-shadow ${intensidade} ${souHoje}">
+        ${dia}
+      </button>`;
+  }
+  $('#cal-grade').innerHTML = celulas;
+  estado.calPorDia = porDia;
+}
+
+$('#cal-grade').addEventListener('click', (e) => {
+  const botaoDia = e.target.closest('[data-dia]');
+  if (!botaoDia) return;
+  const registros = (estado.calPorDia && estado.calPorDia.get(botaoDia.dataset.dia)) || [];
+  const painel = $('#cal-detalhe-dia');
+  if (!registros.length) {
+    painel.classList.remove('hidden');
+    painel.innerHTML = `<p class="text-sm text-banca-muted dark:text-banca-mutedDark">Nenhuma revisão em ${botaoDia.dataset.dia}.</p>`;
+    return;
+  }
+  const porNota = { 1: 0, 2: 0, 3: 0, 4: 0 };
+  const porBaralho = new Map();
+  for (const r of registros) {
+    porNota[r.nota]++;
+    const titulo = (estado.baralhos.find(b => b.id === r.baralho_id) || {}).titulo || 'Matéria removida';
+    porBaralho.set(titulo, (porBaralho.get(titulo) || 0) + 1);
+  }
+  const linhasBaralho = Array.from(porBaralho.entries()).sort((a, b) => b[1] - a[1])
+    .map(([titulo, n]) => `<div class="flex justify-between"><span>${escapeHtmlPlano(titulo)}</span><span class="tabular">${n}</span></div>`).join('');
+  painel.classList.remove('hidden');
+  painel.innerHTML = `
+    <p class="text-sm font-medium mb-2">${botaoDia.dataset.dia} — ${registros.length} cartões revisados</p>
+    <div class="flex gap-4 text-xs mb-3 tabular">
+      <span class="text-banca-brick dark:text-banca-brickLight">Errei: ${porNota[1]}</span>
+      <span class="text-banca-amber dark:text-banca-amberDark">Difícil: ${porNota[2]}</span>
+      <span class="text-banca-accent dark:text-banca-accentLight">Bom: ${porNota[3]}</span>
+      <span class="text-banca-sage dark:text-banca-sageLight">Fácil: ${porNota[4]}</span>
+    </div>
+    <div class="text-xs space-y-1">${linhasBaralho}</div>`;
+});
+
+$('#cal-mes-anterior').addEventListener('click', () => {
+  estado.calMes--;
+  if (estado.calMes < 0) { estado.calMes = 11; estado.calAno--; }
+  renderizarCalendario();
+});
+$('#cal-mes-proximo').addEventListener('click', () => {
+  estado.calMes++;
+  if (estado.calMes > 11) { estado.calMes = 0; estado.calAno++; }
+  renderizarCalendario();
+});
+
+$$('.periodo-evolucao').forEach(botao => botao.addEventListener('click', () => {
+  estado.periodoEvolucao = parseInt(botao.dataset.periodo, 10);
+  $$('.periodo-evolucao').forEach(b => b.classList.toggle('!bg-banca-accent', b === botao));
+  $$('.periodo-evolucao').forEach(b => b.classList.toggle('!text-white', b === botao));
+  renderizarEvolucao();
+}));
+
+async function renderizarEvolucao() {
+  const dias = estado.periodoEvolucao;
+  const desde = new Date();
+  desde.setDate(desde.getDate() - (dias - 1));
+  desde.setHours(0, 0, 0, 0);
+
+  let linhas = [];
+  try {
+    const { data, error } = await supabaseClient.from('historico_revisoes')
+      .select('nota, criado_em, baralho_id')
+      .eq('user_id', estado.usuario.id)
+      .gte('criado_em', desde.toISOString());
+    if (error) throw error;
+    linhas = data;
+  } catch (err) {
+    mostrarToast('Erro ao carregar evolução: ' + err.message, 'erro');
+    return;
+  }
+
+  // Monta série diária (total revisado por dia) para o período
+  const porDia = new Map();
+  for (let i = 0; i < dias; i++) {
+    const d = new Date(desde);
+    d.setDate(d.getDate() + i);
+    porDia.set(chaveDia(d), 0);
+  }
+  const porBaralho = new Map();
+  for (const l of linhas) {
+    const chave = chaveDia(new Date(l.criado_em));
+    if (porDia.has(chave)) porDia.set(chave, porDia.get(chave) + 1);
+    const titulo = (estado.baralhos.find(b => b.id === l.baralho_id) || {}).titulo || 'Matéria removida';
+    porBaralho.set(titulo, (porBaralho.get(titulo) || 0) + 1);
+  }
+
+  const rotulos = Array.from(porDia.keys()).map(k => k.slice(5).split('-').reverse().join('/'));
+  const valores = Array.from(porDia.values());
+
+  const ctx = document.getElementById('grafico-evolucao');
+  if (graficoEvolucaoInstancia) graficoEvolucaoInstancia.destroy();
+  graficoEvolucaoInstancia = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: rotulos,
+      datasets: [{
+        label: 'Cartões revisados',
+        data: valores,
+        borderColor: '#3E6E90',
+        backgroundColor: '#3E6E9022',
+        fill: true,
+        tension: 0.25,
+        pointRadius: dias > 30 ? 0 : 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 8 }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { precision: 0 } },
+      },
+    },
+  });
+
+  const totalGeral = valores.reduce((a, b) => a + b, 0);
+  const maxPorMateria = Math.max(1, ...Array.from(porBaralho.values()));
+  const linhasMateria = Array.from(porBaralho.entries()).sort((a, b) => b[1] - a[1]).map(([titulo, n]) => `
+    <div>
+      <div class="flex justify-between text-xs mb-1">
+        <span>${escapeHtmlPlano(titulo)}</span>
+        <span class="tabular text-banca-muted dark:text-banca-mutedDark">${n}</span>
+      </div>
+      <div class="h-1.5 rounded-full bg-banca-muted/10 dark:bg-banca-mutedDark/10">
+        <div style="width:${Math.round((n / maxPorMateria) * 100)}%" class="h-full rounded-full bg-banca-accent dark:bg-banca-accentLight"></div>
+      </div>
+    </div>`).join('') || '<p class="text-sm text-banca-muted dark:text-banca-mutedDark">Nenhuma revisão nesse período.</p>';
+
+  $('#evolucao-por-materia').innerHTML = `
+    <p class="text-sm text-banca-muted dark:text-banca-mutedDark mb-3">${totalGeral} cartões revisados nos últimos ${dias} dias, por matéria:</p>
+    ${linhasMateria}`;
 }
 
 $('#btn-importar').addEventListener('click', () => {
