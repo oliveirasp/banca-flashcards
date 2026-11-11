@@ -1145,12 +1145,12 @@ function renderizarCartaoAtual() {
   else { badge.classList.add('hidden'); }
 
   const imgFrente = item.cartao.imagem_frente_url
-    ? `<img src="${escapeHtmlPlano(item.cartao.imagem_frente_url)}" alt="" class="max-h-40 max-w-full object-contain mx-auto mb-3 rounded">` : '';
+    ? `<div class="inline-block bg-white p-2 rounded-lg shadow-sm mb-3"><img src="${escapeHtmlPlano(item.cartao.imagem_frente_url)}" alt="" class="max-h-36 max-w-full object-contain rounded"></div><br>` : '';
   const modoFrente = item.cartao.tipo === 'cloze' ? 'frente' : null;
   $('#conteudo-frente').innerHTML = imgFrente + renderCampo(item.cartao.frente, modoFrente);
 
   const imgVerso = item.cartao.imagem_verso_url
-    ? `<img src="${escapeHtmlPlano(item.cartao.imagem_verso_url)}" alt="" class="max-h-40 max-w-full object-contain mx-auto mb-3 rounded">` : '';
+    ? `<div class="inline-block bg-white p-2 rounded-lg shadow-sm mb-3"><img src="${escapeHtmlPlano(item.cartao.imagem_verso_url)}" alt="" class="max-h-36 max-w-full object-contain rounded"></div><br>` : '';
   const modoVerso = item.cartao.tipo === 'cloze' ? 'verso' : null;
   $('#conteudo-verso').innerHTML = imgVerso + renderCampo(item.cartao.verso, modoVerso);
   $('#campo-anotacao').value = item.progresso.anotacao_pessoal || '';
