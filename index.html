@@ -194,6 +194,7 @@
       <span class="hidden sm:inline text-xs text-banca-muted dark:text-banca-mutedDark">revisão ativa para concursos</span>
     </div>
     <div class="flex items-center gap-1">
+      <button id="btn-progresso" class="botao-secundario !py-1.5 !px-3 text-sm">Progresso</button>
       <button id="btn-importar" class="botao-secundario !py-1.5 !px-3 text-sm">Importar CSV</button>
       <button id="btn-tema" class="icon-btn" aria-label="Alternar tema"></button>
       <button id="btn-sair" class="icon-btn" aria-label="Sair" title="Sair">
@@ -251,6 +252,16 @@
     <div id="dashboard-vazio" class="hidden text-center py-16 text-banca-muted dark:text-banca-mutedDark">
       <p class="mb-3">Nenhum concurso cadastrado ainda.</p>
       <button data-reabre="novo-concurso" class="botao-primario">Criar seu primeiro concurso</button>
+    </div>
+  </section>
+
+  <!-- ===================== PROGRESSO ===================== -->
+  <section id="view-progress" class="hidden max-w-3xl mx-auto px-4 py-8 pb-24">
+    <h2 class="font-serif text-2xl mb-1">Seu progresso</h2>
+    <p class="text-sm text-banca-muted dark:text-banca-mutedDark mb-6">Quanto de cada matéria você já domina, está aprendendo ou ainda nem viu.</p>
+    <div id="lista-progresso"></div>
+    <div id="progresso-vazio" class="hidden text-center py-16 text-banca-muted dark:text-banca-mutedDark">
+      <p>Nenhum concurso cadastrado ainda.</p>
     </div>
   </section>
 
@@ -460,7 +471,7 @@ function mostrarToast(mensagem, tipo) {
 }
 
 function mostrarView(nome) {
-  ['auth', 'dashboard', 'study'].forEach(v => {
+  ['auth', 'dashboard', 'study', 'progress'].forEach(v => {
     $('#view-' + v).classList.toggle('hidden', v !== nome);
   });
   $('#cabecalho').classList.toggle('hidden', nome === 'auth');
@@ -1150,6 +1161,15 @@ async function graduarCartaoAtual(nota) {
     if (error) mostrarToast('Falha ao salvar progresso: ' + error.message, 'erro');
   });
 
+  supabaseClient.from('historico_revisoes').insert({
+    user_id: estado.usuario.id,
+    cartao_id: item.cartao.id,
+    baralho_id: item.cartao.baralho_id,
+    nota,
+  }).then(({ error }) => {
+    if (error) console.warn('Falha ao gravar histórico:', error.message);
+  });
+
   sessao.indice++;
   if (sessao.indice >= sessao.fila.length) {
     finalizarSessaoEstudo();
@@ -1197,6 +1217,73 @@ document.addEventListener('keydown', (e) => {
 // ======================================================================
 // IMPORTADOR DE CSV
 // ======================================================================
+$('#btn-progresso').addEventListener('click', () => {
+  mostrarView('progress');
+  renderizarProgresso();
+});
+
+const LIMIAR_DOMINADO = 3; // repetições a partir daqui conta como "dominado"
+
+function calcularProgressoPorBaralho() {
+  const ocultosPorMim = new Set(estado.participacao.filter(p => p.oculto).map(p => p.concurso_id));
+  const progressoPorCartao = new Map(estado.progresso.map(p => [p.cartao_id, p]));
+  const porBaralho = new Map();
+  for (const c of estado.cartoes) {
+    if (!porBaralho.has(c.baralho_id)) porBaralho.set(c.baralho_id, { total: 0, dominados: 0, aprendendo: 0, novos: 0 });
+    const agr = porBaralho.get(c.baralho_id);
+    agr.total++;
+    const p = progressoPorCartao.get(c.id);
+    if (!p) agr.novos++;
+    else if (p.repeticoes >= LIMIAR_DOMINADO) agr.dominados++;
+    else agr.aprendendo++;
+  }
+  return { porBaralho, ocultosPorMim };
+}
+
+function renderizarProgresso() {
+  const { porBaralho, ocultosPorMim } = calcularProgressoPorBaralho();
+  const concursosVisiveis = estado.concursos.filter(c => !ocultosPorMim.has(c.id));
+  const lista = $('#lista-progresso');
+
+  if (!concursosVisiveis.length) {
+    lista.innerHTML = '';
+    $('#progresso-vazio').classList.remove('hidden');
+    return;
+  }
+  $('#progresso-vazio').classList.add('hidden');
+
+  lista.innerHTML = concursosVisiveis.map(concurso => {
+    const baralhosDoConcurso = estado.baralhos.filter(b => b.concurso_id === concurso.id);
+    const linhas = baralhosDoConcurso.map(b => {
+      const s = porBaralho.get(b.id) || { total: 0, dominados: 0, aprendendo: 0, novos: 0 };
+      const pct = (n) => s.total ? Math.round((n / s.total) * 100) : 0;
+      return `
+        <div class="py-3">
+          <div class="flex items-center justify-between text-sm mb-1.5">
+            <span class="font-medium">${escapeHtmlPlano(b.titulo)}</span>
+            <span class="text-banca-muted dark:text-banca-mutedDark tabular">${s.dominados}/${s.total} dominados</span>
+          </div>
+          <div class="h-2 rounded-full overflow-hidden flex bg-banca-muted/10 dark:bg-banca-mutedDark/10">
+            <div style="width:${pct(s.dominados)}%" class="bg-banca-sage dark:bg-banca-sageLight" title="Dominados: ${s.dominados}"></div>
+            <div style="width:${pct(s.aprendendo)}%" class="bg-banca-amber dark:bg-banca-amberDark" title="Aprendendo: ${s.aprendendo}"></div>
+            <div style="width:${pct(s.novos)}%" class="bg-banca-muted/30 dark:bg-banca-mutedDark/30" title="Novos: ${s.novos}"></div>
+          </div>
+        </div>`;
+    }).join('') || `<p class="text-sm text-banca-muted dark:text-banca-mutedDark py-2">Nenhuma matéria ainda.</p>`;
+
+    return `
+      <section class="border-t border-banca-muted/15 dark:border-banca-mutedDark/15 pt-5 pb-1 mb-2">
+        <h3 class="font-serif text-xl mb-1">${escapeHtmlPlano(concurso.nome)}</h3>
+        <div class="divide-y divide-banca-muted/10 dark:divide-banca-mutedDark/10">${linhas}</div>
+      </section>`;
+  }).join('') + `
+    <div class="flex items-center gap-4 text-xs text-banca-muted dark:text-banca-mutedDark mt-4 pt-3 border-t border-banca-muted/15 dark:border-banca-mutedDark/15">
+      <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-banca-sage dark:bg-banca-sageLight"></span>Dominado (3+ acertos seguidos)</span>
+      <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-banca-amber dark:bg-banca-amberDark"></span>Aprendendo</span>
+      <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-banca-muted/30 dark:bg-banca-mutedDark/30"></span>Ainda não visto</span>
+    </div>`;
+}
+
 $('#btn-importar').addEventListener('click', () => {
   estado.importacao = null;
   $('#imp-arquivo').value = '';
