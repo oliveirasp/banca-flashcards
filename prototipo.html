@@ -1,0 +1,1296 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Banca — Revisão Ativa para Concursos</title>
+
+<script>
+  // Define o tema (claro/escuro) antes da primeira pintura, para evitar flash.
+  (function () {
+    try {
+      var salvo = localStorage.getItem('banca-theme');
+      var escuro = salvo ? salvo === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (escuro) document.documentElement.classList.add('dark');
+    } catch (e) {}
+  })();
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          serif: ['"Source Serif 4"', 'Georgia', 'serif'],
+          sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        },
+        colors: {
+          banca: {
+            ink: '#11151B',
+            panel: '#1A2029',
+            panel2: '#20273150',
+            paper: '#E7EAEE',
+            paperPanel: '#FFFFFF',
+            text: '#1A2029',
+            textLight: '#EDEEF0',
+            muted: '#5B6572',
+            mutedDark: '#8B93A1',
+            accent: '#3E6E90',
+            accentLight: '#6FA0C4',
+            amber: '#B9792E',
+            amberDark: '#D9A441',
+            brick: '#9C4A35',
+            brickLight: '#C06A52',
+            sage: '#466B55',
+            sageLight: '#7FAE91',
+          },
+        },
+      },
+    },
+  };
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.1/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    color-scheme: light;
+  }
+  html.dark { color-scheme: dark; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: inherit; }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto;
+    height: env(safe-area-inset-top, 0px);
+    z-index: 40;
+    background: #E7EAEE;
+  }
+  html.dark body::before { background: #11151B; }
+
+  body {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    background: #E7EAEE;
+    color: #1A2029;
+  }
+  html.dark body { background: #11151B; color: #EDEEF0; }
+
+  ::selection { background: #3E6E90; color: #fff; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #5B657233; border-radius: 999px; }
+  html.dark ::-webkit-scrollbar-thumb { background: #8B93A133; }
+
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  mark.cloze-gap, mark.cloze-reveal {
+    background: transparent;
+    font-weight: 600;
+    padding: 0 .15em;
+    border-radius: .2em;
+  }
+  mark.cloze-gap { color: #3E6E90; background: #3E6E901a; }
+  html.dark mark.cloze-gap { color: #6FA0C4; background: #6FA0C41a; }
+  mark.cloze-reveal { color: #9C4A35; background: #9C4A3514; }
+  html.dark mark.cloze-reveal { color: #C06A52; background: #C06A5214; }
+
+  .flashcard-scene { perspective: 1400px; }
+  .flashcard {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    transition: transform .55s cubic-bezier(.4,.15,.2,1);
+    cursor: pointer;
+  }
+  .flashcard.is-flipped { transform: rotateY(180deg); }
+  .flashcard-face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border-radius: .5rem;
+    overflow: hidden;
+  }
+  .flashcard-face.back { transform: rotateY(180deg); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flashcard { transition: none; }
+  }
+
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2rem; height: 2rem; border-radius: .375rem;
+    color: #5B6572; transition: background-color .15s, color .15s;
+  }
+  html.dark .icon-btn { color: #8B93A1; }
+  .icon-btn:hover { background: #3E6E900f; color: #3E6E90; }
+  html.dark .icon-btn:hover { background: #6FA0C41a; color: #6FA0C4; }
+
+  .campo {
+    width: 100%; border-radius: .375rem; padding: .55rem .75rem;
+    background: #FFFFFF; border: 1px solid #5B657233; color: #1A2029;
+    font-size: .9rem;
+  }
+  html.dark .campo { background: #20273170; border-color: #8B93A133; color: #EDEEF0; }
+  .campo:focus { outline: 2px solid #3E6E90; outline-offset: 1px; border-color: transparent; }
+
+  .botao-primario {
+    background: #3E6E90; color: #fff; border-radius: .375rem;
+    padding: .55rem 1rem; font-weight: 500; font-size: .9rem;
+    transition: background-color .15s;
+  }
+  .botao-primario:hover { background: #335c79; }
+  .botao-primario:disabled { opacity: .5; cursor: not-allowed; }
+
+  .botao-secundario {
+    border-radius: .375rem; padding: .55rem 1rem; font-weight: 500; font-size: .9rem;
+    border: 1px solid #5B657240; color: #1A2029; transition: background-color .15s;
+  }
+  html.dark .botao-secundario { border-color: #8B93A140; color: #EDEEF0; }
+  .botao-secundario:hover { background: #5B65720d; }
+  html.dark .botao-secundario:hover { background: #8B93A11a; }
+
+  .grade-btn {
+    flex: 1; border-radius: .375rem; padding: .7rem .5rem; text-align: center;
+    border-bottom: 3px solid; font-size: .85rem; font-weight: 500;
+    background: #FFFFFF; transition: transform .1s, background-color .15s;
+    color: #1A2029;
+  }
+  html.dark .grade-btn { background: #1A2029; color: #EDEEF0; }
+  .grade-btn:hover { transform: translateY(-1px); }
+  .grade-btn:active { transform: translateY(0); }
+
+  [data-hidden-fade] { animation: aparecer .25s ease; }
+  @keyframes aparecer { from { opacity: 0; transform: translateY(4px);} to { opacity:1; transform:none; } }
+</style>
+</head>
+
+<body class="min-h-screen">
+
+<div id="caixa-toasts" class="fixed top-3 right-3 z-50 flex flex-col gap-2 w-[min(92vw,22rem)]" style="margin-top: env(safe-area-inset-top, 0px);"></div>
+
+<div id="tela-carregando" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-banca-paper/70 dark:bg-banca-ink/70 backdrop-blur-sm">
+  <div class="h-8 w-8 rounded-full border-2 border-banca-accent border-t-transparent animate-spin"></div>
+</div>
+
+<header id="cabecalho" class="hidden sticky z-30 border-b border-banca-muted/15 dark:border-banca-mutedDark/15 bg-banca-paper/90 dark:bg-banca-ink/90 backdrop-blur" style="top: env(safe-area-inset-top, 0px);">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-baseline gap-2">
+      <h1 class="font-serif text-xl">Banca</h1>
+      <span class="hidden sm:inline text-xs text-banca-muted dark:text-banca-mutedDark">revisão ativa para concursos</span>
+    </div>
+    <div class="flex items-center gap-1">
+      <button id="btn-importar" class="botao-secundario !py-1.5 !px-3 text-sm">Importar CSV</button>
+      <button id="btn-tema" class="icon-btn" aria-label="Alternar tema"></button>
+      <button id="btn-sair" class="icon-btn" aria-label="Sair" title="Sair">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===================== AUTENTICAÇÃO ===================== -->
+  <section id="view-auth" class="min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-sm" data-hidden-fade>
+      <div class="text-center mb-8">
+        <h1 class="font-serif text-3xl mb-1">Banca</h1>
+        <p class="text-sm text-banca-muted dark:text-banca-mutedDark">Revisão espaçada para quem não pode errar na prova.</p>
+      </div>
+      <div class="bg-banca-paperPanel dark:bg-banca-panel border border-banca-muted/15 dark:border-banca-mutedDark/15 rounded-lg p-6">
+        <div class="flex text-sm mb-5 border-b border-banca-muted/15 dark:border-banca-mutedDark/15">
+          <button data-aba-auth="entrar" class="aba-auth flex-1 pb-2 font-medium border-b-2 border-banca-accent text-banca-accent">Entrar</button>
+          <button data-aba-auth="criar" class="aba-auth flex-1 pb-2 font-medium border-b-2 border-transparent text-banca-muted dark:text-banca-mutedDark">Criar conta</button>
+        </div>
+        <form id="form-auth" class="space-y-3">
+          <div>
+            <label class="block text-xs mb-1 text-banca-muted dark:text-banca-mutedDark">E-mail</label>
+            <input type="email" id="campo-email" required class="campo" autocomplete="email">
+          </div>
+          <div>
+            <label class="block text-xs mb-1 text-banca-muted dark:text-banca-mutedDark">Senha</label>
+            <input type="password" id="campo-senha" required minlength="6" class="campo" autocomplete="current-password">
+          </div>
+          <p id="erro-auth" class="hidden text-sm text-banca-brick dark:text-banca-brickLight"></p>
+          <button type="submit" id="btn-submit-auth" class="botao-primario w-full">Entrar</button>
+          <button type="button" id="link-esqueci-senha" class="text-xs text-banca-accent dark:text-banca-accentLight hover:underline">Esqueci minha senha</button>
+        </form>
+        <div id="bloco-nova-senha" class="hidden space-y-3">
+          <p class="text-sm text-banca-muted dark:text-banca-mutedDark">Defina sua nova senha.</p>
+          <input type="password" id="campo-nova-senha" required minlength="6" class="campo" placeholder="Nova senha" autocomplete="new-password">
+          <button id="btn-salvar-nova-senha" class="botao-primario w-full">Salvar nova senha</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== DASHBOARD ===================== -->
+  <section id="view-dashboard" class="hidden max-w-3xl mx-auto px-4 py-8 pb-24">
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="font-serif text-2xl">Seus concursos</h2>
+      <button id="btn-novo-concurso" class="botao-secundario !py-1.5 !px-3 text-sm">Novo concurso</button>
+    </div>
+    <p class="text-sm text-banca-muted dark:text-banca-mutedDark mb-4">Toque em uma matéria para começar a revisar o que está vencido.</p>
+    <div id="lista-concursos"></div>
+    <div id="dashboard-vazio" class="hidden text-center py-16 text-banca-muted dark:text-banca-mutedDark">
+      <p class="mb-3">Nenhum concurso cadastrado ainda.</p>
+      <button data-reabre="novo-concurso" class="botao-primario">Criar seu primeiro concurso</button>
+    </div>
+  </section>
+
+  <!-- ===================== SESSÃO DE ESTUDO ===================== -->
+  <section id="view-study" class="hidden max-w-xl mx-auto px-4 py-8">
+    <div id="estudo-corpo">
+      <div class="flex items-center justify-between mb-5 text-sm text-banca-muted dark:text-banca-mutedDark">
+        <button id="btn-encerrar-estudo" class="hover:text-banca-accent">Encerrar sessão</button>
+        <span id="contador-estudo" class="tabular"></span>
+      </div>
+
+      <div id="cena-cartao" class="flashcard-scene" style="height: 320px;">
+        <div id="cartao-flip" class="flashcard">
+          <div class="flashcard-face front bg-banca-paperPanel dark:bg-banca-panel border border-banca-muted/15 dark:border-banca-mutedDark/15 flex flex-col p-6">
+            <div class="flex items-center justify-between mb-2 min-h-[1rem]">
+              <span id="label-materia" class="hidden text-xs text-banca-accent dark:text-banca-accentLight font-medium"></span>
+              <span id="badge-tipo" class="hidden text-xs text-banca-muted dark:text-banca-mutedDark"></span>
+            </div>
+            <div class="flex-1 flex items-center justify-center text-center">
+              <div id="conteudo-frente" class="text-lg leading-relaxed"></div>
+            </div>
+            <p class="text-center text-xs text-banca-muted dark:text-banca-mutedDark mt-2">espaço ou toque para virar</p>
+          </div>
+          <div class="flashcard-face back bg-banca-paperPanel dark:bg-banca-panel border border-banca-muted/15 dark:border-banca-mutedDark/15 flex flex-col p-6 overflow-y-auto">
+            <div id="conteudo-verso" class="text-base leading-relaxed mb-3"></div>
+            <textarea id="campo-anotacao" placeholder="Anotação pessoal (só você vê)" rows="2" class="campo !bg-transparent text-sm mt-auto" onclick="event.stopPropagation()"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div id="barra-notas" class="hidden mt-5 flex gap-2">
+        <button data-nota="1" class="grade-btn border-banca-brick">Errei <span class="block text-[11px] text-banca-muted dark:text-banca-mutedDark">1</span></button>
+        <button data-nota="2" class="grade-btn border-banca-amber">Difícil <span class="block text-[11px] text-banca-muted dark:text-banca-mutedDark">2</span></button>
+        <button data-nota="3" class="grade-btn border-banca-accent">Bom <span class="block text-[11px] text-banca-muted dark:text-banca-mutedDark">3</span></button>
+        <button data-nota="4" class="grade-btn border-banca-sage">Fácil <span class="block text-[11px] text-banca-muted dark:text-banca-mutedDark">4</span></button>
+      </div>
+    </div>
+
+    <div id="resumo-sessao" class="hidden text-center py-12" data-hidden-fade>
+      <h3 class="font-serif text-2xl mb-6">Sessão concluída</h3>
+      <div class="flex justify-center gap-6 mb-8 text-sm tabular">
+        <div><div class="text-2xl text-banca-brick dark:text-banca-brickLight" id="resumo-errei">0</div>Errei</div>
+        <div><div class="text-2xl text-banca-amber dark:text-banca-amberDark" id="resumo-dificil">0</div>Difícil</div>
+        <div><div class="text-2xl text-banca-accent dark:text-banca-accentLight" id="resumo-bom">0</div>Bom</div>
+        <div><div class="text-2xl text-banca-sage dark:text-banca-sageLight" id="resumo-facil">0</div>Fácil</div>
+      </div>
+      <button id="btn-voltar-painel" class="botao-primario">Voltar ao painel</button>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===================== MODAL: NOVO CONCURSO ===================== -->
+<div id="modal-novo-concurso" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+  <div class="w-full max-w-sm bg-banca-paperPanel dark:bg-banca-panel rounded-lg p-6">
+    <h3 class="font-serif text-xl mb-4">Novo concurso</h3>
+    <form id="form-novo-concurso" class="space-y-3">
+      <div>
+        <label class="block text-xs mb-1 text-banca-muted dark:text-banca-mutedDark">Nome</label>
+        <input id="nc-nome" required class="campo" placeholder="Ex: Carreiras Policiais (PF/PRF/Senado)">
+      </div>
+      <div>
+        <label class="block text-xs mb-1 text-banca-muted dark:text-banca-mutedDark">Descrição (opcional)</label>
+        <textarea id="nc-descricao" rows="2" class="campo"></textarea>
+      </div>
+      <div class="flex gap-2 justify-end pt-2">
+        <button type="button" class="botao-secundario fechar-modal">Cancelar</button>
+        <button type="submit" class="botao-primario">Criar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== MODAL: NOVO BARALHO ===================== -->
+<div id="modal-novo-baralho" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+  <div class="w-full max-w-sm bg-banca-paperPanel dark:bg-banca-panel rounded-lg p-6">
+    <h3 class="font-serif text-xl mb-4">Novo baralho</h3>
+    <form id="form-novo-baralho" class="space-y-3">
+      <div>
+        <label class="block text-xs mb-1 text-banca-muted dark:text-banca-mutedDark">Concurso</label>
+        <select id="nb-concurso" required class="campo"></select>
+      </div>
+      <div>
+        <label class="block text-xs mb-1 text-banca-muted dark:text-banca-mutedDark">Título</label>
+        <input id="nb-titulo" required class="campo" placeholder="Ex: Direito Penal - Inquérito Policial">
+      </div>
+      <div>
+        <label class="block text-xs mb-1 text-banca-muted dark:text-banca-mutedDark">Peso no edital (nº de questões desta matéria)</label>
+        <input id="nb-peso" type="number" min="1" step="1" value="1" class="campo">
+      </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" id="nb-compartilhado" checked>
+        Compartilhado (visível para todos os usuários)
+      </label>
+      <div class="flex gap-2 justify-end pt-2">
+        <button type="button" class="botao-secundario fechar-modal">Cancelar</button>
+        <button type="submit" class="botao-primario">Criar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== MODAL: IMPORTAR CSV ===================== -->
+<div id="modal-importar" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+  <div class="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-banca-paperPanel dark:bg-banca-panel rounded-lg p-6">
+    <h3 class="font-serif text-xl mb-1">Importar cartões</h3>
+    <p class="text-sm text-banca-muted dark:text-banca-mutedDark mb-4">Formato 4 colunas <code class="text-xs">Concurso;Materia;Frente;Verso</code> (cria concurso/baralho automaticamente) ou 2 colunas <code class="text-xs">Frente;Verso</code> (escolha o destino abaixo). Separador: ponto e vírgula.</p>
+
+    <div class="flex text-sm mb-4 border-b border-banca-muted/15 dark:border-banca-mutedDark/15">
+      <button data-aba-importar="arquivo" class="aba-importar flex-1 pb-2 font-medium border-b-2 border-banca-accent text-banca-accent">Arquivo .csv</button>
+      <button data-aba-importar="texto" class="aba-importar flex-1 pb-2 font-medium border-b-2 border-transparent text-banca-muted dark:text-banca-mutedDark">Colar texto</button>
+    </div>
+
+    <div id="painel-importar-arquivo">
+      <input type="file" id="imp-arquivo" accept=".csv,text/csv" class="campo">
+    </div>
+    <div id="painel-importar-texto" class="hidden">
+      <textarea id="imp-texto" rows="6" class="campo font-mono text-xs" placeholder="PF/PRF;Direito Penal;Frente do cartão;Verso do cartão"></textarea>
+      <button id="btn-processar-texto" class="botao-secundario mt-2 text-sm">Processar texto</button>
+    </div>
+
+    <div id="imp-destino-2col" class="hidden mt-4 grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs mb-1 text-banca-muted dark:text-banca-mutedDark">Concurso de destino</label>
+        <select id="imp-concurso" class="campo"></select>
+      </div>
+      <div>
+        <label class="block text-xs mb-1 text-banca-muted dark:text-banca-mutedDark">Baralho de destino</label>
+        <select id="imp-baralho" class="campo"></select>
+      </div>
+    </div>
+
+    <div id="imp-preview" class="hidden mt-4">
+      <p class="text-sm mb-2"><span id="imp-contagem" class="font-medium"></span> cartões prontos para importar.</p>
+      <div class="border border-banca-muted/15 dark:border-banca-mutedDark/15 rounded-md overflow-hidden text-xs max-h-48 overflow-y-auto">
+        <table class="w-full">
+          <thead class="bg-banca-muted/5 dark:bg-banca-mutedDark/10">
+            <tr id="imp-preview-cabecalho"></tr>
+          </thead>
+          <tbody id="imp-preview-corpo"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="imp-progresso" class="hidden mt-4 text-sm text-banca-muted dark:text-banca-mutedDark"></div>
+
+    <div class="flex gap-2 justify-end pt-5">
+      <button type="button" class="botao-secundario fechar-modal">Cancelar</button>
+      <button id="btn-confirmar-importar" disabled class="botao-primario">Confirmar importação</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ======================================================================
+// CONFIGURAÇÃO / CLIENTE SUPABASE
+// ======================================================================
+const SUPABASE_URL = 'https://uhkzrwyqprihoghwqnqk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoa3pyd3lxcHJpaG9naHdxbnFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzOTQxNTksImV4cCI6MjEwOTk3MDE1OX0.wRLh5ywkIfY2f5Bq3JG1nfGZdm0M0_gdI3i0_qwcSUM';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ======================================================================
+// ESTADO GLOBAL
+// ======================================================================
+const estado = {
+  usuario: null,
+  concursos: [],
+  baralhos: [],
+  cartoes: [],
+  progresso: [],
+  estudo: null,       // sessão de estudo ativa
+  importacao: null,   // dados pendentes de importação CSV
+  abaAuth: 'entrar',
+};
+
+// ======================================================================
+// UTILITÁRIOS DE UI
+// ======================================================================
+const $ = (sel, raiz) => (raiz || document).querySelector(sel);
+const $$ = (sel, raiz) => Array.from((raiz || document).querySelectorAll(sel));
+
+function mostrarCarregando(v) { $('#tela-carregando').classList.toggle('hidden', !v); }
+
+function mostrarToast(mensagem, tipo) {
+  const cores = {
+    ok: 'border-banca-sage text-banca-sage dark:text-banca-sageLight',
+    erro: 'border-banca-brick text-banca-brick dark:text-banca-brickLight',
+    info: 'border-banca-accent text-banca-accent dark:text-banca-accentLight',
+  };
+  const el = document.createElement('div');
+  el.className = `bg-banca-paperPanel dark:bg-banca-panel border-l-4 ${cores[tipo || 'info']} rounded-md shadow-lg px-4 py-3 text-sm text-banca-text dark:text-banca-textLight`;
+  el.textContent = mensagem;
+  $('#caixa-toasts').appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 4200);
+}
+
+function mostrarView(nome) {
+  ['auth', 'dashboard', 'study'].forEach(v => {
+    $('#view-' + v).classList.toggle('hidden', v !== nome);
+  });
+  $('#cabecalho').classList.toggle('hidden', nome === 'auth');
+}
+
+function abrirModal(id) { $(id).classList.remove('hidden'); }
+function fecharModal(id) { $(id).classList.add('hidden'); }
+
+$$('.fechar-modal').forEach(btn => btn.addEventListener('click', () => {
+  btn.closest('[id^="modal-"]').classList.add('hidden');
+}));
+
+// ---- tema claro/escuro ----
+function iconeTema() {
+  const escuro = document.documentElement.classList.contains('dark');
+  return escuro
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+}
+function atualizarIconeTema() { $('#btn-tema').innerHTML = iconeTema(); }
+atualizarIconeTema();
+$('#btn-tema').addEventListener('click', () => {
+  const html = document.documentElement;
+  html.classList.toggle('dark');
+  try { localStorage.setItem('banca-theme', html.classList.contains('dark') ? 'dark' : 'light'); } catch (e) {}
+  atualizarIconeTema();
+});
+
+// ======================================================================
+// SANITIZAÇÃO DE TEXTO (HTML limitado a <b> <i> <br>) + CLOZE DELETION
+// ======================================================================
+function renderCampo(bruto, modoCloze) {
+  let t = (bruto || '').replace(/\r\n|\r|\n/g, '<br>');
+  t = t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (modoCloze === 'frente') {
+    t = t.replace(/\{\{c\d+::(.*?)\}\}/g, '<mark class="cloze-gap">[...]</mark>');
+  } else if (modoCloze === 'verso') {
+    t = t.replace(/\{\{c\d+::(.*?)\}\}/g, '<mark class="cloze-reveal">$1</mark>');
+  }
+  t = t.replace(/&lt;(\/?)b&gt;/gi, '<$1b>')
+       .replace(/&lt;(\/?)i&gt;/gi, '<$1i>')
+       .replace(/&lt;br\s*\/?&gt;/gi, '<br>');
+  return t;
+}
+function ehCloze(texto) { return /\{\{c\d+::.*?\}\}/.test(texto || ''); }
+
+// ======================================================================
+// ALGORITMO DE REPETIÇÃO ESPAÇADA — SM-2 APRIMORADO
+// (mapeia 1=Errei 2=Difícil 3=Bom 4=Fácil para qualidade 0/3/4/5)
+// ======================================================================
+function estadoProgressoPadrao() {
+  return { intervalo_dias: 0, fator_facilidade: 2.5, repeticoes: 0, anotacao_pessoal: '' };
+}
+function proximoEstado(progresso, nota) {
+  const qualidade = { 1: 0, 2: 3, 3: 4, 4: 5 }[nota];
+  let fator = progresso.fator_facilidade + (0.1 - (5 - qualidade) * (0.08 + (5 - qualidade) * 0.02));
+  fator = Math.max(1.3, fator);
+  const agora = new Date();
+  let intervalo, repeticoes, proxima;
+  if (qualidade < 3) {
+    repeticoes = 0;
+    intervalo = 0;
+    proxima = new Date(agora.getTime() + 10 * 60 * 1000); // reaparece em 10 min
+  } else {
+    repeticoes = progresso.repeticoes + 1;
+    if (repeticoes === 1) intervalo = 1;
+    else if (repeticoes === 2) intervalo = 6;
+    else intervalo = Math.max(1, Math.round((progresso.intervalo_dias || 1) * fator));
+    proxima = new Date(agora.getTime() + intervalo * 24 * 60 * 60 * 1000);
+  }
+  return { intervalo_dias: intervalo, fator_facilidade: fator, repeticoes, proxima_revisao: proxima.toISOString() };
+}
+
+// ======================================================================
+// CONSULTAS EM LOTE (evita URLs gigantes em .in())
+// ======================================================================
+async function selecionarEmLotes(tabela, colunas, coluna, ids, extra) {
+  const TAMANHO = 300;
+  let resultado = [];
+  for (let i = 0; i < ids.length; i += TAMANHO) {
+    let q = supabaseClient.from(tabela).select(colunas).in(coluna, ids.slice(i, i + TAMANHO));
+    if (extra) q = extra(q);
+    const { data, error } = await q;
+    if (error) throw error;
+    resultado = resultado.concat(data);
+  }
+  return resultado;
+}
+
+// ======================================================================
+// AUTENTICAÇÃO
+// ======================================================================
+$$('.aba-auth').forEach(botao => botao.addEventListener('click', () => {
+  estado.abaAuth = botao.dataset.abaAuth;
+  $$('.aba-auth').forEach(b => {
+    const ativo = b === botao;
+    b.classList.toggle('border-banca-accent', ativo);
+    b.classList.toggle('text-banca-accent', ativo);
+    b.classList.toggle('border-transparent', !ativo);
+    b.classList.toggle('text-banca-muted', !ativo);
+  });
+  $('#btn-submit-auth').textContent = estado.abaAuth === 'entrar' ? 'Entrar' : 'Criar conta';
+  $('#link-esqueci-senha').classList.toggle('hidden', estado.abaAuth !== 'entrar');
+  $('#erro-auth').classList.add('hidden');
+}));
+
+$('#form-auth').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = $('#campo-email').value.trim();
+  const senha = $('#campo-senha').value;
+  const erroEl = $('#erro-auth');
+  erroEl.classList.add('hidden');
+  mostrarCarregando(true);
+  try {
+    if (estado.abaAuth === 'entrar') {
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password: senha });
+      if (error) throw error;
+    } else {
+      const { data, error } = await supabaseClient.auth.signUp({ email, password: senha });
+      if (error) throw error;
+      if (data && !data.session) {
+        mostrarToast('Conta criada! Verifique seu e-mail para confirmar o acesso.', 'ok');
+      }
+    }
+  } catch (err) {
+    erroEl.textContent = err.message || 'Não foi possível concluir. Tente novamente.';
+    erroEl.classList.remove('hidden');
+  } finally {
+    mostrarCarregando(false);
+  }
+});
+
+$('#btn-sair').addEventListener('click', async () => {
+  await supabaseClient.auth.signOut();
+});
+
+$('#link-esqueci-senha').addEventListener('click', async () => {
+  const email = $('#campo-email').value.trim();
+  if (!email) { mostrarToast('Digite seu e-mail no campo acima primeiro.', 'erro'); return; }
+  mostrarCarregando(true);
+  try {
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+    if (error) throw error;
+    mostrarToast('Se esse e-mail estiver cadastrado, enviamos um link de redefinição de senha.', 'ok');
+  } catch (err) {
+    mostrarToast('Erro ao solicitar redefinição: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+  }
+});
+
+$('#btn-salvar-nova-senha').addEventListener('click', async () => {
+  const novaSenha = $('#campo-nova-senha').value;
+  if (novaSenha.length < 6) { mostrarToast('A senha precisa ter pelo menos 6 caracteres.', 'erro'); return; }
+  mostrarCarregando(true);
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: novaSenha });
+    if (error) throw error;
+    mostrarToast('Senha atualizada! Agora é só entrar normalmente.', 'ok');
+    $('#bloco-nova-senha').classList.add('hidden');
+    $('#form-auth').classList.remove('hidden');
+    $('#campo-nova-senha').value = '';
+  } catch (err) {
+    mostrarToast('Erro ao atualizar senha: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+  }
+});
+
+supabaseClient.auth.onAuthStateChange((evento, sessao) => {
+  if (evento === 'PASSWORD_RECOVERY') {
+    mostrarView('auth');
+    $('#form-auth').classList.add('hidden');
+    $('#bloco-nova-senha').classList.remove('hidden');
+    return;
+  }
+  if (sessao && sessao.user) {
+    estado.usuario = sessao.user;
+    mostrarView('dashboard');
+    carregarDashboard();
+  } else {
+    estado.usuario = null;
+    estado.estudo = null;
+    mostrarView('auth');
+  }
+});
+
+// ======================================================================
+// DASHBOARD
+// ======================================================================
+async function carregarDashboard() {
+  mostrarCarregando(true);
+  try {
+    const { data: concursos, error: e1 } = await supabaseClient.from('concursos').select('*').order('created_at', { ascending: true });
+    if (e1) throw e1;
+    const { data: baralhos, error: e2 } = await supabaseClient.from('baralhos').select('*').order('created_at', { ascending: true });
+    if (e2) throw e2;
+
+    const baralhoIds = baralhos.map(b => b.id);
+    const cartoes = baralhoIds.length ? await selecionarEmLotes('cartoes', 'id,baralho_id', 'baralho_id', baralhoIds) : [];
+    const cartaoIds = cartoes.map(c => c.id);
+    const progresso = cartaoIds.length
+      ? await selecionarEmLotes('progresso_usuario', 'cartao_id,proxima_revisao', 'cartao_id', cartaoIds, q => q.eq('user_id', estado.usuario.id))
+      : [];
+
+    estado.concursos = concursos;
+    estado.baralhos = baralhos;
+    estado.cartoes = cartoes;
+    estado.progresso = progresso;
+    renderizarDashboard();
+  } catch (err) {
+    mostrarToast('Erro ao carregar painel: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+  }
+}
+
+function calcularContagens() {
+  const agora = new Date();
+  const progressoPorCartao = new Map(estado.progresso.map(p => [p.cartao_id, p]));
+  const porBaralho = new Map();
+  for (const c of estado.cartoes) {
+    if (!porBaralho.has(c.baralho_id)) porBaralho.set(c.baralho_id, { total: 0, novos: 0, vencidos: 0 });
+    const agr = porBaralho.get(c.baralho_id);
+    agr.total++;
+    const p = progressoPorCartao.get(c.id);
+    if (!p) agr.novos++;
+    else if (new Date(p.proxima_revisao) <= agora) agr.vencidos++;
+  }
+  return porBaralho;
+}
+
+function renderizarDashboard() {
+  const contagens = calcularContagens();
+  const lista = $('#lista-concursos');
+  if (!estado.concursos.length) {
+    lista.innerHTML = '';
+    $('#dashboard-vazio').classList.remove('hidden');
+    return;
+  }
+  $('#dashboard-vazio').classList.add('hidden');
+
+  lista.innerHTML = estado.concursos.map(concurso => {
+    const baralhosDoConcurso = estado.baralhos.filter(b => b.concurso_id === concurso.id);
+    let vencidosConcurso = 0, novosConcurso = 0;
+    const linhasBaralho = baralhosDoConcurso.map(b => {
+      const c = contagens.get(b.id) || { total: 0, novos: 0, vencidos: 0 };
+      vencidosConcurso += c.vencidos;
+      novosConcurso += c.novos;
+      return `
+        <button data-baralho-id="${b.id}" class="w-full flex items-center justify-between py-3 text-left hover:bg-banca-accent/5 dark:hover:bg-banca-accentLight/5 transition-colors rounded px-2 -mx-2">
+          <span class="flex items-center gap-2 min-w-0">
+            <span class="font-medium truncate">${escapeHtmlPlano(b.titulo)}</span>
+            ${!b.compartilhado ? '<span class="shrink-0 text-[11px] px-1.5 py-0.5 rounded border border-banca-muted/30 dark:border-banca-mutedDark/30 text-banca-muted dark:text-banca-mutedDark">privado</span>' : ''}
+            <span data-editar-peso data-baralho-id="${b.id}" title="Peso no edital — clique para editar" class="shrink-0 text-[11px] px-1.5 py-0.5 rounded border border-banca-accent/30 dark:border-banca-accentLight/30 text-banca-accent dark:text-banca-accentLight hover:bg-banca-accent/10">peso ${b.peso ?? 1}</span>
+          </span>
+          <span class="flex items-center gap-4 text-sm tabular shrink-0 pl-3">
+            <span class="${c.vencidos ? 'text-banca-amber dark:text-banca-amberDark font-semibold' : 'text-banca-muted dark:text-banca-mutedDark'}">${c.vencidos}</span>
+            <span class="text-banca-muted dark:text-banca-mutedDark">${c.novos} novos</span>
+            <span data-excluir-baralho data-baralho-id="${b.id}" title="Excluir baralho" class="icon-btn !w-6 !h-6 text-banca-muted/50 dark:text-banca-mutedDark/50 hover:!text-banca-brick hover:!bg-banca-brick/10">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+            </span>
+          </span>
+        </button>`;
+    }).join('') || `<p class="text-sm text-banca-muted dark:text-banca-mutedDark py-2">Nenhum baralho ainda neste concurso.</p>`;
+
+    return `
+      <section class="border-t border-banca-muted/15 dark:border-banca-mutedDark/15 pt-6 pb-2">
+        <div class="flex items-baseline justify-between mb-2 gap-3">
+          <div class="min-w-0">
+            <h2 class="font-serif text-2xl truncate">${escapeHtmlPlano(concurso.nome)}</h2>
+            ${concurso.descricao ? `<p class="text-sm text-banca-muted dark:text-banca-mutedDark">${escapeHtmlPlano(concurso.descricao)}</p>` : ''}
+          </div>
+          <div class="flex items-center gap-3 text-sm shrink-0">
+            <span class="${vencidosConcurso ? 'text-banca-amber dark:text-banca-amberDark font-semibold' : 'text-banca-muted dark:text-banca-mutedDark'} tabular">${vencidosConcurso}</span>
+            <span class="text-banca-muted dark:text-banca-mutedDark tabular">${novosConcurso} novos</span>
+            <button data-acao="estudar-concurso" data-concurso-id="${concurso.id}" class="botao-secundario !py-1 !px-2.5 text-xs">Estudar tudo</button>
+            <button data-acao="novo-baralho" data-concurso-id="${concurso.id}" class="icon-btn" aria-label="Novo baralho neste concurso" title="Novo baralho">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <button data-acao="excluir-concurso" data-concurso-id="${concurso.id}" class="icon-btn hover:!text-banca-brick hover:!bg-banca-brick/10" aria-label="Excluir concurso" title="Excluir concurso">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="divide-y divide-banca-muted/10 dark:divide-banca-mutedDark/10">${linhasBaralho}</div>
+      </section>`;
+  }).join('');
+}
+
+function escapeHtmlPlano(t) {
+  return (t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+$('#lista-concursos').addEventListener('click', (e) => {
+  const badgePeso = e.target.closest('[data-editar-peso]');
+  if (badgePeso) { editarPesoBaralho(badgePeso.dataset.baralhoId); return; }
+  const botaoExcluirBaralho = e.target.closest('[data-excluir-baralho]');
+  if (botaoExcluirBaralho) { excluirBaralho(botaoExcluirBaralho.dataset.baralhoId); return; }
+  const linhaBaralho = e.target.closest('[data-baralho-id]');
+  if (linhaBaralho) { iniciarEstudo(linhaBaralho.dataset.baralhoId); return; }
+  const botaoNovoBaralho = e.target.closest('[data-acao="novo-baralho"]');
+  if (botaoNovoBaralho) { abrirModalNovoBaralho(botaoNovoBaralho.dataset.concursoId); return; }
+  const botaoEstudarConcurso = e.target.closest('[data-acao="estudar-concurso"]');
+  if (botaoEstudarConcurso) { iniciarEstudoConcurso(botaoEstudarConcurso.dataset.concursoId); return; }
+  const botaoExcluirConcurso = e.target.closest('[data-acao="excluir-concurso"]');
+  if (botaoExcluirConcurso) { excluirConcurso(botaoExcluirConcurso.dataset.concursoId); }
+});
+
+$('[data-reabre="novo-concurso"]')?.addEventListener('click', () => abrirModal('#modal-novo-concurso'));
+$('#btn-novo-concurso').addEventListener('click', () => abrirModal('#modal-novo-concurso'));
+
+$('#form-novo-concurso').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nome = $('#nc-nome').value.trim();
+  const descricao = $('#nc-descricao').value.trim();
+  mostrarCarregando(true);
+  try {
+    const { data, error } = await supabaseClient.from('concursos').insert({ nome, descricao: descricao || null, criado_por: estado.usuario.id }).select().single();
+    if (error) throw error;
+    estado.concursos.push(data);
+    renderizarDashboard();
+    fecharModal('#modal-novo-concurso');
+    e.target.reset();
+    mostrarToast('Concurso criado.', 'ok');
+  } catch (err) {
+    mostrarToast('Erro ao criar concurso: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+  }
+});
+
+async function editarPesoBaralho(baralhoId) {
+  const baralho = estado.baralhos.find(b => b.id === baralhoId);
+  if (!baralho) return;
+  const entrada = window.prompt(`Peso de "${baralho.titulo}" no edital (nº de questões):`, String(baralho.peso ?? 1));
+  if (entrada === null) return;
+  const novoPeso = Math.max(1, parseInt(entrada, 10) || 1);
+  if (novoPeso === baralho.peso) return;
+  mostrarCarregando(true);
+  try {
+    const { error } = await supabaseClient.from('baralhos').update({ peso: novoPeso }).eq('id', baralhoId);
+    if (error) throw error;
+    baralho.peso = novoPeso;
+    renderizarDashboard();
+    mostrarToast('Peso atualizado.', 'ok');
+  } catch (err) {
+    mostrarToast('Erro ao atualizar peso: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+  }
+}
+
+async function excluirBaralho(baralhoId) {
+  const baralho = estado.baralhos.find(b => b.id === baralhoId);
+  if (!baralho) return;
+  const ok = window.confirm(`Excluir o baralho "${baralho.titulo}"? Isso apaga todos os cartões e o progresso de revisão dele. Não pode ser desfeito.`);
+  if (!ok) return;
+  mostrarCarregando(true);
+  try {
+    const { error } = await supabaseClient.from('baralhos').delete().eq('id', baralhoId);
+    if (error) throw error;
+    estado.baralhos = estado.baralhos.filter(b => b.id !== baralhoId);
+    estado.cartoes = estado.cartoes.filter(c => c.baralho_id !== baralhoId);
+    renderizarDashboard();
+    mostrarToast('Baralho excluído.', 'ok');
+  } catch (err) {
+    mostrarToast('Erro ao excluir baralho: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+  }
+}
+
+async function excluirConcurso(concursoId) {
+  const concurso = estado.concursos.find(c => c.id === concursoId);
+  if (!concurso) return;
+  const ok = window.confirm(`Excluir o concurso "${concurso.nome}" e TODOS os baralhos e cartões dele? Não pode ser desfeito.`);
+  if (!ok) return;
+  mostrarCarregando(true);
+  try {
+    const { error } = await supabaseClient.from('concursos').delete().eq('id', concursoId);
+    if (error) throw error;
+    estado.cartoes = estado.cartoes.filter(c => {
+      const b = estado.baralhos.find(bb => bb.id === c.baralho_id);
+      return b && b.concurso_id !== concursoId;
+    });
+    estado.baralhos = estado.baralhos.filter(b => b.concurso_id !== concursoId);
+    estado.concursos = estado.concursos.filter(c => c.id !== concursoId);
+    renderizarDashboard();
+    mostrarToast('Concurso excluído.', 'ok');
+  } catch (err) {
+    mostrarToast('Erro ao excluir concurso: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+  }
+}
+
+function abrirModalNovoBaralho(concursoIdPreSelecionado) {
+  const sel = $('#nb-concurso');
+  sel.innerHTML = estado.concursos.map(c => `<option value="${c.id}">${escapeHtmlPlano(c.nome)}</option>`).join('');
+  if (concursoIdPreSelecionado) sel.value = concursoIdPreSelecionado;
+  abrirModal('#modal-novo-baralho');
+}
+
+$('#form-novo-baralho').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const concurso_id = $('#nb-concurso').value;
+  const titulo = $('#nb-titulo').value.trim();
+  const compartilhado = $('#nb-compartilhado').checked;
+  const peso = Math.max(1, parseInt($('#nb-peso').value, 10) || 1);
+  mostrarCarregando(true);
+  try {
+    const { data, error } = await supabaseClient.from('baralhos').insert({ concurso_id, titulo, compartilhado, peso, criado_por: estado.usuario.id }).select().single();
+    if (error) throw error;
+    estado.baralhos.push(data);
+    renderizarDashboard();
+    fecharModal('#modal-novo-baralho');
+    e.target.reset();
+    mostrarToast('Baralho criado.', 'ok');
+  } catch (err) {
+    mostrarToast('Erro ao criar baralho: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+  }
+});
+
+// ======================================================================
+// SESSÃO DE ESTUDO
+// ======================================================================
+const LIMITE_NOVOS_POR_SESSAO = 20;
+
+async function iniciarEstudo(baralhoId) {
+  mostrarCarregando(true);
+  try {
+    const { data: cartoesBaralho, error } = await supabaseClient.from('cartoes').select('*').eq('baralho_id', baralhoId).order('created_at', { ascending: true });
+    if (error) throw error;
+    const ids = cartoesBaralho.map(c => c.id);
+    const progresso = ids.length ? await selecionarEmLotes('progresso_usuario', '*', 'cartao_id', ids, q => q.eq('user_id', estado.usuario.id)) : [];
+    const progressoPorCartao = new Map(progresso.map(p => [p.cartao_id, p]));
+    const agora = new Date();
+    const vencidos = [], novos = [];
+    for (const c of cartoesBaralho) {
+      const p = progressoPorCartao.get(c.id);
+      if (!p) novos.push(c);
+      else if (new Date(p.proxima_revisao) <= agora) vencidos.push(c);
+    }
+    const fila = [...vencidos, ...novos.slice(0, LIMITE_NOVOS_POR_SESSAO)].map(c => ({
+      cartao: c,
+      progresso: progressoPorCartao.get(c.id) || estadoProgressoPadrao(),
+    }));
+    if (!fila.length) {
+      mostrarToast('Nada para revisar por aqui agora. Volte mais tarde!', 'ok');
+      return;
+    }
+    estado.estudo = { baralhoId, fila, indice: 0, virado: false, stats: { 1: 0, 2: 0, 3: 0, 4: 0 } };
+    $('#estudo-corpo').classList.remove('hidden');
+    $('#resumo-sessao').classList.add('hidden');
+    mostrarView('study');
+    renderizarCartaoAtual();
+  } catch (err) {
+    mostrarToast('Erro ao iniciar sessão: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+  }
+}
+
+// Distribui o orçamento de cartões novos entre baralhos proporcionalmente ao peso de cada um
+// (maior peso no edital = mais cartões novos aparecem primeiro nas sessões "Estudar tudo")
+function distribuirNovosPorPeso(novosPorBaralho, baralhoPorId, orcamentoTotal) {
+  const entradas = Array.from(novosPorBaralho.entries()).filter(([, lista]) => lista.length > 0);
+  if (!entradas.length) return [];
+  const pesos = entradas.map(([id]) => Math.max(1, (baralhoPorId.get(id) || {}).peso || 1));
+  const somaPesos = pesos.reduce((a, b) => a + b, 0);
+  const cotas = entradas.map(([id, lista], i) => {
+    const bruta = orcamentoTotal * pesos[i] / somaPesos;
+    const base = Math.min(lista.length, Math.floor(bruta));
+    return { lista, base, resto: bruta - Math.floor(bruta), capacidadeRestante: lista.length - base };
+  });
+  let usado = cotas.reduce((soma, c) => soma + c.base, 0);
+  let sobra = Math.min(orcamentoTotal - usado, cotas.reduce((s, c) => s + c.capacidadeRestante, 0));
+  const ordemPorResto = cotas.map((c, i) => i).sort((a, b) => cotas[b].resto - cotas[a].resto);
+  let ponteiro = 0;
+  while (sobra > 0 && ponteiro < ordemPorResto.length * 3) {
+    const i = ordemPorResto[ponteiro % ordemPorResto.length];
+    if (cotas[i].base < cotas[i].lista.length) { cotas[i].base++; sobra--; }
+    ponteiro++;
+  }
+  let resultado = [];
+  for (const c of cotas) resultado = resultado.concat(c.lista.slice(0, c.base));
+  return resultado;
+}
+
+function embaralhar(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+async function iniciarEstudoConcurso(concursoId) {
+  mostrarCarregando(true);
+  try {
+    const baralhosDoConcurso = estado.baralhos.filter(b => b.concurso_id === concursoId);
+    if (!baralhosDoConcurso.length) {
+      mostrarToast('Este concurso ainda não tem baralhos com cartões.', 'erro');
+      return;
+    }
+    const baralhoPorId = new Map(baralhosDoConcurso.map(b => [b.id, b]));
+    const baralhoIds = baralhosDoConcurso.map(b => b.id);
+    const cartoesDoConcurso = await selecionarEmLotes('cartoes', '*', 'baralho_id', baralhoIds);
+    const ids = cartoesDoConcurso.map(c => c.id);
+    const progresso = ids.length ? await selecionarEmLotes('progresso_usuario', '*', 'cartao_id', ids, q => q.eq('user_id', estado.usuario.id)) : [];
+    const progressoPorCartao = new Map(progresso.map(p => [p.cartao_id, p]));
+    const agora = new Date();
+    const vencidos = [], novos = [];
+    for (const c of cartoesDoConcurso) {
+      const p = progressoPorCartao.get(c.id);
+      if (!p) novos.push(c);
+      else if (new Date(p.proxima_revisao) <= agora) vencidos.push(c);
+    }
+    embaralhar(vencidos);
+    const novosPorBaralho = new Map();
+    for (const c of novos) {
+      if (!novosPorBaralho.has(c.baralho_id)) novosPorBaralho.set(c.baralho_id, []);
+      novosPorBaralho.get(c.baralho_id).push(c);
+    }
+    for (const lista of novosPorBaralho.values()) embaralhar(lista);
+    const novosSelecionados = distribuirNovosPorPeso(novosPorBaralho, baralhoPorId, LIMITE_NOVOS_POR_SESSAO);
+    embaralhar(novosSelecionados);
+    const fila = [...vencidos, ...novosSelecionados].map(c => ({
+      cartao: c,
+      progresso: progressoPorCartao.get(c.id) || estadoProgressoPadrao(),
+      baralhoTitulo: (baralhoPorId.get(c.baralho_id) || {}).titulo || '',
+    }));
+    if (!fila.length) {
+      mostrarToast('Nada para revisar por aqui agora. Volte mais tarde!', 'ok');
+      return;
+    }
+    estado.estudo = { concursoId, fila, indice: 0, virado: false, stats: { 1: 0, 2: 0, 3: 0, 4: 0 } };
+    $('#estudo-corpo').classList.remove('hidden');
+    $('#resumo-sessao').classList.add('hidden');
+    mostrarView('study');
+    renderizarCartaoAtual();
+  } catch (err) {
+    mostrarToast('Erro ao iniciar sessão: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+  }
+}
+
+function itemAtual() { return estado.estudo.fila[estado.estudo.indice]; }
+
+function renderizarCartaoAtual() {
+  const sessao = estado.estudo;
+  const item = itemAtual();
+  sessao.virado = false;
+
+  $('#contador-estudo').textContent = `${sessao.indice + 1} / ${sessao.fila.length}`;
+  $('#cartao-flip').classList.remove('is-flipped');
+  $('#barra-notas').classList.add('hidden');
+
+  const labelMateria = $('#label-materia');
+  if (item.baralhoTitulo) { labelMateria.textContent = item.baralhoTitulo; labelMateria.classList.remove('hidden'); }
+  else { labelMateria.classList.add('hidden'); }
+
+  const badge = $('#badge-tipo');
+  if (item.cartao.tipo === 'cloze') { badge.textContent = 'Cloze'; badge.classList.remove('hidden'); }
+  else if (item.cartao.tipo === 'certo_errado') { badge.textContent = 'Certo ou errado'; badge.classList.remove('hidden'); }
+  else { badge.classList.add('hidden'); }
+
+  const modoFrente = item.cartao.tipo === 'cloze' ? 'frente' : null;
+  $('#conteudo-frente').innerHTML = renderCampo(item.cartao.frente, modoFrente);
+
+  const modoVerso = item.cartao.tipo === 'cloze' ? 'verso' : null;
+  $('#conteudo-verso').innerHTML = renderCampo(item.cartao.verso, modoVerso);
+  $('#campo-anotacao').value = item.progresso.anotacao_pessoal || '';
+}
+
+function virarCartaoAtual() {
+  if (!estado.estudo || estado.estudo.virado) return;
+  estado.estudo.virado = true;
+  $('#cartao-flip').classList.add('is-flipped');
+  $('#barra-notas').classList.remove('hidden');
+}
+$('#cartao-flip').addEventListener('click', virarCartaoAtual);
+
+$('#barra-notas').addEventListener('click', (e) => {
+  const botao = e.target.closest('[data-nota]');
+  if (botao) graduarCartaoAtual(parseInt(botao.dataset.nota, 10));
+});
+
+async function graduarCartaoAtual(nota) {
+  const sessao = estado.estudo;
+  if (!sessao || !sessao.virado) return;
+  const item = itemAtual();
+  const anotacao = $('#campo-anotacao').value.trim();
+  const novoEstado = proximoEstado(item.progresso, nota);
+  sessao.stats[nota]++;
+
+  if (nota === 1) {
+    // "Errei": o cartão volta a aparecer ainda nesta sessão (reforço imediato),
+    // não só num dia futuro — com o estado de progresso já atualizado.
+    const copia = {
+      cartao: item.cartao,
+      baralhoTitulo: item.baralhoTitulo,
+      progresso: { ...item.progresso, ...novoEstado, anotacao_pessoal: anotacao || item.progresso.anotacao_pessoal || '' },
+    };
+    const posicaoAlvo = Math.min(sessao.fila.length, sessao.indice + 1 + 4);
+    sessao.fila.splice(posicaoAlvo, 0, copia);
+  }
+
+  supabaseClient.from('progresso_usuario').upsert({
+    user_id: estado.usuario.id,
+    cartao_id: item.cartao.id,
+    intervalo_dias: novoEstado.intervalo_dias,
+    fator_facilidade: novoEstado.fator_facilidade,
+    repeticoes: novoEstado.repeticoes,
+    proxima_revisao: novoEstado.proxima_revisao,
+    anotacao_pessoal: anotacao || null,
+  }, { onConflict: 'user_id,cartao_id' }).then(({ error }) => {
+    if (error) mostrarToast('Falha ao salvar progresso: ' + error.message, 'erro');
+  });
+
+  sessao.indice++;
+  if (sessao.indice >= sessao.fila.length) {
+    finalizarSessaoEstudo();
+  } else {
+    renderizarCartaoAtual();
+  }
+}
+
+function finalizarSessaoEstudo() {
+  const stats = estado.estudo.stats;
+  $('#resumo-errei').textContent = stats[1];
+  $('#resumo-dificil').textContent = stats[2];
+  $('#resumo-bom').textContent = stats[3];
+  $('#resumo-facil').textContent = stats[4];
+  $('#estudo-corpo').classList.add('hidden');
+  $('#resumo-sessao').classList.remove('hidden');
+}
+
+$('#btn-voltar-painel').addEventListener('click', () => {
+  estado.estudo = null;
+  mostrarView('dashboard');
+  carregarDashboard();
+});
+$('#btn-encerrar-estudo').addEventListener('click', () => {
+  estado.estudo = null;
+  mostrarView('dashboard');
+  carregarDashboard();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (!estado.estudo) return;
+  const ativo = document.activeElement;
+  if (ativo && (ativo.tagName === 'TEXTAREA' || ativo.tagName === 'INPUT')) return;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (!estado.estudo.virado) virarCartaoAtual();
+    return;
+  }
+  if (['1', '2', '3', '4'].includes(e.key) && estado.estudo.virado) {
+    e.preventDefault();
+    graduarCartaoAtual(parseInt(e.key, 10));
+  }
+});
+
+// ======================================================================
+// IMPORTADOR DE CSV
+// ======================================================================
+$('#btn-importar').addEventListener('click', () => {
+  estado.importacao = null;
+  $('#imp-arquivo').value = '';
+  $('#imp-texto').value = '';
+  $('#imp-preview').classList.add('hidden');
+  $('#imp-destino-2col').classList.add('hidden');
+  $('#imp-progresso').classList.add('hidden');
+  $('#imp-progresso').textContent = '';
+  $('#btn-confirmar-importar').disabled = true;
+  $('#imp-concurso').innerHTML = estado.concursos.map(c => `<option value="${c.id}">${escapeHtmlPlano(c.nome)}</option>`).join('');
+  atualizarSelectBaralhosImportacao();
+  abrirModal('#modal-importar');
+});
+
+$('#imp-concurso').addEventListener('change', atualizarSelectBaralhosImportacao);
+function atualizarSelectBaralhosImportacao() {
+  const concursoId = $('#imp-concurso').value;
+  const baralhosFiltrados = estado.baralhos.filter(b => b.concurso_id === concursoId);
+  $('#imp-baralho').innerHTML = baralhosFiltrados.map(b => `<option value="${b.id}">${escapeHtmlPlano(b.titulo)}</option>`).join('')
+    || '<option value="">(nenhum baralho neste concurso)</option>';
+}
+
+$$('.aba-importar').forEach(botao => botao.addEventListener('click', () => {
+  const alvo = botao.dataset.abaImportar;
+  $$('.aba-importar').forEach(b => {
+    const ativo = b === botao;
+    b.classList.toggle('border-banca-accent', ativo);
+    b.classList.toggle('text-banca-accent', ativo);
+    b.classList.toggle('border-transparent', !ativo);
+    b.classList.toggle('text-banca-muted', !ativo);
+  });
+  $('#painel-importar-arquivo').classList.toggle('hidden', alvo !== 'arquivo');
+  $('#painel-importar-texto').classList.toggle('hidden', alvo !== 'texto');
+}));
+
+$('#imp-arquivo').addEventListener('change', (e) => {
+  const arquivo = e.target.files[0];
+  if (!arquivo) return;
+  Papa.parse(arquivo, {
+    delimiter: ';',
+    skipEmptyLines: true,
+    complete: (res) => processarLinhasCsv(res.data),
+    error: (err) => mostrarToast('Erro ao ler arquivo: ' + err.message, 'erro'),
+  });
+});
+
+$('#btn-processar-texto').addEventListener('click', () => {
+  const texto = $('#imp-texto').value;
+  if (!texto.trim()) return;
+  const res = Papa.parse(texto, { delimiter: ';', skipEmptyLines: true });
+  processarLinhasCsv(res.data);
+});
+
+function processarLinhasCsv(linhasBrutas) {
+  const linhas = linhasBrutas.filter(l => l.some(cel => String(cel || '').trim() !== ''));
+  if (!linhas.length) { mostrarToast('Nenhuma linha válida encontrada.', 'erro'); return; }
+
+  const nCols = linhas[0].length;
+  const primeira = linhas[0].map(c => String(c || '').trim().toLowerCase());
+  let temCabecalho = false;
+  if (nCols >= 4 && primeira[0].startsWith('concurso') && (primeira[2] || '').startsWith('frente')) temCabecalho = true;
+  if (nCols === 2 && primeira[0].startsWith('frente') && (primeira[1] || '').startsWith('verso')) temCabecalho = true;
+  const dados = temCabecalho ? linhas.slice(1) : linhas;
+  const formato = nCols >= 4 ? '4col' : '2col';
+
+  const processadas = dados.map(linha => {
+    if (formato === '4col') {
+      const [concursoNome, materiaNome, frente, verso] = linha;
+      const tipo = ehCloze(frente) ? 'cloze' : (['certo', 'errado'].includes(String(verso || '').trim().toLowerCase()) ? 'certo_errado' : 'padrao');
+      return { concursoNome: (concursoNome || '').trim(), materiaNome: (materiaNome || '').trim(), frente: (frente || '').trim(), verso: (verso || '').trim(), tipo };
+    } else {
+      const [frente, verso] = linha;
+      const tipo = ehCloze(frente) ? 'cloze' : (['certo', 'errado'].includes(String(verso || '').trim().toLowerCase()) ? 'certo_errado' : 'padrao');
+      return { frente: (frente || '').trim(), verso: (verso || '').trim(), tipo };
+    }
+  }).filter(l => l.frente && l.verso && (formato === '2col' || (l.concursoNome && l.materiaNome)));
+
+  if (!processadas.length) { mostrarToast('Não encontrei linhas completas para importar.', 'erro'); return; }
+
+  estado.importacao = { formato, linhas: processadas };
+  $('#imp-destino-2col').classList.toggle('hidden', formato !== '2col');
+  $('#imp-contagem').textContent = processadas.length;
+  $('#imp-preview').classList.remove('hidden');
+
+  const colunas = formato === '4col' ? ['Concurso', 'Matéria', 'Frente', 'Verso'] : ['Frente', 'Verso'];
+  $('#imp-preview-cabecalho').innerHTML = colunas.map(c => `<th class="text-left px-2 py-1 font-medium">${c}</th>`).join('');
+  $('#imp-preview-corpo').innerHTML = processadas.slice(0, 15).map(l => {
+    const celulas = formato === '4col'
+      ? [l.concursoNome, l.materiaNome, l.frente, l.verso]
+      : [l.frente, l.verso];
+    return '<tr class="border-t border-banca-muted/10 dark:border-banca-mutedDark/10">' + celulas.map(c => `<td class="px-2 py-1 align-top">${escapeHtmlPlano(String(c).slice(0, 80))}</td>`).join('') + '</tr>';
+  }).join('');
+
+  $('#btn-confirmar-importar').disabled = false;
+}
+
+async function inserirCartoesEmLotes(cartoes, onProgresso) {
+  const TAMANHO = 300;
+  for (let i = 0; i < cartoes.length; i += TAMANHO) {
+    const lote = cartoes.slice(i, i + TAMANHO);
+    const { error } = await supabaseClient.from('cartoes').insert(lote);
+    if (error) throw error;
+    if (onProgresso) onProgresso(Math.min(i + lote.length, cartoes.length), cartoes.length);
+  }
+}
+
+$('#btn-confirmar-importar').addEventListener('click', async () => {
+  if (!estado.importacao) return;
+  const { formato, linhas } = estado.importacao;
+  $('#imp-progresso').classList.remove('hidden');
+  $('#imp-progresso').textContent = 'Importando...';
+  $('#btn-confirmar-importar').disabled = true;
+  mostrarCarregando(true);
+  try {
+    let cartoesParaInserir = [];
+    if (formato === '4col') {
+      const cacheConcursos = new Map(estado.concursos.map(c => [c.nome.trim().toLowerCase(), c]));
+      const cacheBaralhos = new Map(estado.baralhos.map(b => [`${b.concurso_id}::${b.titulo.trim().toLowerCase()}`, b]));
+      for (const l of linhas) {
+        const chaveConcurso = l.concursoNome.toLowerCase();
+        let concurso = cacheConcursos.get(chaveConcurso);
+        if (!concurso) {
+          const { data, error } = await supabaseClient.from('concursos').insert({ nome: l.concursoNome, criado_por: estado.usuario.id }).select().single();
+          if (error) throw error;
+          concurso = data;
+          cacheConcursos.set(chaveConcurso, concurso);
+          estado.concursos.push(concurso);
+        }
+        const chaveBaralho = `${concurso.id}::${l.materiaNome.toLowerCase()}`;
+        let baralho = cacheBaralhos.get(chaveBaralho);
+        if (!baralho) {
+          const { data, error } = await supabaseClient.from('baralhos').insert({ concurso_id: concurso.id, titulo: l.materiaNome, compartilhado: true, criado_por: estado.usuario.id }).select().single();
+          if (error) throw error;
+          baralho = data;
+          cacheBaralhos.set(chaveBaralho, baralho);
+          estado.baralhos.push(baralho);
+        }
+        cartoesParaInserir.push({ baralho_id: baralho.id, frente: l.frente, verso: l.verso, tipo: l.tipo });
+      }
+    } else {
+      const baralhoId = $('#imp-baralho').value;
+      if (!baralhoId) throw new Error('Selecione um baralho de destino.');
+      cartoesParaInserir = linhas.map(l => ({ baralho_id: baralhoId, frente: l.frente, verso: l.verso, tipo: l.tipo }));
+    }
+
+    await inserirCartoesEmLotes(cartoesParaInserir, (feito, total) => {
+      $('#imp-progresso').textContent = `Importando ${feito} / ${total} cartões...`;
+    });
+
+    mostrarToast(`${cartoesParaInserir.length} cartões importados com sucesso.`, 'ok');
+    fecharModal('#modal-importar');
+    await carregarDashboard();
+  } catch (err) {
+    mostrarToast('Erro na importação: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+    $('#btn-confirmar-importar').disabled = false;
+  }
+});
+
+// ======================================================================
+// INICIALIZAÇÃO
+// ======================================================================
+(async function iniciar() {
+  mostrarCarregando(true);
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) mostrarCarregando(false);
+  // onAuthStateChange cuida da renderização inicial (dispara com INITIAL_SESSION)
+})();
+</script>
+
+</body>
+</html>
