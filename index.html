@@ -1144,11 +1144,15 @@ function renderizarCartaoAtual() {
   else if (item.cartao.tipo === 'certo_errado') { badge.textContent = 'Certo ou errado'; badge.classList.remove('hidden'); }
   else { badge.classList.add('hidden'); }
 
+  const imgFrente = item.cartao.imagem_frente_url
+    ? `<img src="${escapeHtmlPlano(item.cartao.imagem_frente_url)}" alt="" class="max-h-40 max-w-full object-contain mx-auto mb-3 rounded">` : '';
   const modoFrente = item.cartao.tipo === 'cloze' ? 'frente' : null;
-  $('#conteudo-frente').innerHTML = renderCampo(item.cartao.frente, modoFrente);
+  $('#conteudo-frente').innerHTML = imgFrente + renderCampo(item.cartao.frente, modoFrente);
 
+  const imgVerso = item.cartao.imagem_verso_url
+    ? `<img src="${escapeHtmlPlano(item.cartao.imagem_verso_url)}" alt="" class="max-h-40 max-w-full object-contain mx-auto mb-3 rounded">` : '';
   const modoVerso = item.cartao.tipo === 'cloze' ? 'verso' : null;
-  $('#conteudo-verso').innerHTML = renderCampo(item.cartao.verso, modoVerso);
+  $('#conteudo-verso').innerHTML = imgVerso + renderCampo(item.cartao.verso, modoVerso);
   $('#campo-anotacao').value = item.progresso.anotacao_pessoal || '';
 }
 
@@ -1603,10 +1607,10 @@ function processarLinhasCsv(linhasBrutas) {
 
   const processadas = dados.map(linha => {
     if (formato === '4col') {
-      const [concursoNome, materiaNome, frente, verso, pesoStr] = linha;
+      const [concursoNome, materiaNome, frente, verso, pesoStr, imagemFrenteUrl, imagemVersoUrl] = linha;
       const tipo = ehCloze(frente) ? 'cloze' : (['certo', 'errado'].includes(String(verso || '').trim().toLowerCase()) ? 'certo_errado' : 'padrao');
       const peso = pesoStr ? Math.max(1, parseInt(pesoStr, 10) || 1) : 1;
-      return { concursoNome: (concursoNome || '').trim(), materiaNome: (materiaNome || '').trim(), frente: (frente || '').trim(), verso: (verso || '').trim(), tipo, peso };
+      return { concursoNome: (concursoNome || '').trim(), materiaNome: (materiaNome || '').trim(), frente: (frente || '').trim(), verso: (verso || '').trim(), tipo, peso, imagemFrenteUrl: (imagemFrenteUrl || '').trim() || null, imagemVersoUrl: (imagemVersoUrl || '').trim() || null };
     } else {
       const [frente, verso] = linha;
       const tipo = ehCloze(frente) ? 'cloze' : (['certo', 'errado'].includes(String(verso || '').trim().toLowerCase()) ? 'certo_errado' : 'padrao');
@@ -1675,7 +1679,7 @@ $('#btn-confirmar-importar').addEventListener('click', async () => {
           cacheBaralhos.set(chaveBaralho, baralho);
           estado.baralhos.push(baralho);
         }
-        cartoesParaInserir.push({ baralho_id: baralho.id, frente: l.frente, verso: l.verso, tipo: l.tipo });
+        cartoesParaInserir.push({ baralho_id: baralho.id, frente: l.frente, verso: l.verso, tipo: l.tipo, imagem_frente_url: l.imagemFrenteUrl, imagem_verso_url: l.imagemVersoUrl });
       }
     } else {
       const baralhoId = $('#imp-baralho').value;
