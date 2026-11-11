@@ -247,6 +247,7 @@
     </div>
     <p class="text-sm text-banca-muted dark:text-banca-mutedDark mb-4">Toque em uma matéria para começar a revisar o que está vencido.</p>
     <div id="lista-concursos"></div>
+    <div id="rodape-ocultos" class="hidden mt-6 pt-4 border-t border-banca-muted/15 dark:border-banca-mutedDark/15"></div>
     <div id="dashboard-vazio" class="hidden text-center py-16 text-banca-muted dark:text-banca-mutedDark">
       <p class="mb-3">Nenhum concurso cadastrado ainda.</p>
       <button data-reabre="novo-concurso" class="botao-primario">Criar seu primeiro concurso</button>
@@ -426,6 +427,7 @@ const estado = {
   baralhos: [],
   cartoes: [],
   progresso: [],
+  participacao: [],   // preferências pessoais: concursos escondidos da própria lista
   estudo: null,       // sessão de estudo ativa
   importacao: null,   // dados pendentes de importação CSV
   abaAuth: 'entrar',
@@ -659,10 +661,14 @@ async function carregarDashboard() {
       ? await selecionarEmLotes('progresso_usuario', 'cartao_id,proxima_revisao', 'cartao_id', cartaoIds, q => q.eq('user_id', estado.usuario.id))
       : [];
 
+    const { data: participacao, error: e5 } = await supabaseClient.from('concurso_participacao').select('*').eq('user_id', estado.usuario.id);
+    if (e5) throw e5;
+
     estado.concursos = concursos;
     estado.baralhos = baralhos;
     estado.cartoes = cartoes;
     estado.progresso = progresso;
+    estado.participacao = participacao;
     renderizarDashboard();
   } catch (err) {
     mostrarToast('Erro ao carregar painel: ' + err.message, 'erro');
@@ -696,7 +702,11 @@ function renderizarDashboard() {
   }
   $('#dashboard-vazio').classList.add('hidden');
 
-  lista.innerHTML = estado.concursos.map(concurso => {
+  const ocultosPorMim = new Set(estado.participacao.filter(p => p.oculto).map(p => p.concurso_id));
+  const concursosAtivos = estado.concursos.filter(c => !ocultosPorMim.has(c.id));
+  const concursosOcultos = estado.concursos.filter(c => ocultosPorMim.has(c.id));
+
+  lista.innerHTML = concursosAtivos.map(concurso => {
     const baralhosDoConcurso = estado.baralhos.filter(b => b.concurso_id === concurso.id);
     let vencidosConcurso = 0, novosConcurso = 0;
     const linhasBaralho = baralhosDoConcurso.map(b => {
@@ -737,6 +747,9 @@ function renderizarDashboard() {
             <button data-acao="novo-baralho" data-concurso-id="${concurso.id}" class="icon-btn" aria-label="Novo baralho neste concurso" title="Novo baralho">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
+            <button data-acao="ocultar-concurso" data-concurso-id="${concurso.id}" class="icon-btn" aria-label="Remover da minha lista" title="Remover da minha lista (não apaga, só some da sua tela)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
             <button data-acao="excluir-concurso" data-concurso-id="${concurso.id}" class="icon-btn hover:!text-banca-brick hover:!bg-banca-brick/10" aria-label="Excluir concurso" title="Excluir concurso">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
             </button>
@@ -745,6 +758,25 @@ function renderizarDashboard() {
         <div class="divide-y divide-banca-muted/10 dark:divide-banca-mutedDark/10">${linhasBaralho}</div>
       </section>`;
   }).join('');
+
+  const rodapeOcultos = $('#rodape-ocultos');
+  if (concursosOcultos.length) {
+    rodapeOcultos.classList.remove('hidden');
+    rodapeOcultos.innerHTML = `
+      <button id="btn-toggle-ocultos" class="text-sm text-banca-muted dark:text-banca-mutedDark hover:text-banca-accent">
+        ${concursosOcultos.length} concurso(s) fora da sua lista — mostrar
+      </button>
+      <div id="lista-ocultos" class="hidden mt-2 space-y-1">
+        ${concursosOcultos.map(c => `
+          <div class="flex items-center justify-between text-sm py-1.5">
+            <span class="truncate">${escapeHtmlPlano(c.nome)}</span>
+            <button data-acao="mostrar-concurso" data-concurso-id="${c.id}" class="text-banca-accent dark:text-banca-accentLight hover:underline shrink-0 pl-3">Mostrar de novo</button>
+          </div>`).join('')}
+      </div>`;
+  } else {
+    rodapeOcultos.classList.add('hidden');
+    rodapeOcultos.innerHTML = '';
+  }
 }
 
 function escapeHtmlPlano(t) {
@@ -763,7 +795,18 @@ $('#lista-concursos').addEventListener('click', (e) => {
   const botaoEstudarConcurso = e.target.closest('[data-acao="estudar-concurso"]');
   if (botaoEstudarConcurso) { iniciarEstudoConcurso(botaoEstudarConcurso.dataset.concursoId); return; }
   const botaoExcluirConcurso = e.target.closest('[data-acao="excluir-concurso"]');
-  if (botaoExcluirConcurso) { excluirConcurso(botaoExcluirConcurso.dataset.concursoId); }
+  if (botaoExcluirConcurso) { excluirConcurso(botaoExcluirConcurso.dataset.concursoId); return; }
+  const botaoOcultarConcurso = e.target.closest('[data-acao="ocultar-concurso"]');
+  if (botaoOcultarConcurso) { definirOcultoConcurso(botaoOcultarConcurso.dataset.concursoId, true); }
+});
+
+$('#rodape-ocultos').addEventListener('click', (e) => {
+  if (e.target.closest('#btn-toggle-ocultos')) {
+    $('#lista-ocultos').classList.toggle('hidden');
+    return;
+  }
+  const botaoMostrar = e.target.closest('[data-acao="mostrar-concurso"]');
+  if (botaoMostrar) { definirOcultoConcurso(botaoMostrar.dataset.concursoId, false); }
 });
 
 $('[data-reabre="novo-concurso"]')?.addEventListener('click', () => abrirModal('#modal-novo-concurso'));
@@ -806,6 +849,26 @@ async function editarPesoBaralho(baralhoId) {
     mostrarToast('Peso atualizado.', 'ok');
   } catch (err) {
     mostrarToast('Erro ao atualizar peso: ' + err.message, 'erro');
+  } finally {
+    mostrarCarregando(false);
+  }
+}
+
+async function definirOcultoConcurso(concursoId, oculto) {
+  mostrarCarregando(true);
+  try {
+    const { error } = await supabaseClient.from('concurso_participacao').upsert({
+      user_id: estado.usuario.id,
+      concurso_id: concursoId,
+      oculto,
+    }, { onConflict: 'user_id,concurso_id' });
+    if (error) throw error;
+    const existente = estado.participacao.find(p => p.concurso_id === concursoId);
+    if (existente) existente.oculto = oculto;
+    else estado.participacao.push({ user_id: estado.usuario.id, concurso_id: concursoId, oculto });
+    renderizarDashboard();
+  } catch (err) {
+    mostrarToast('Erro ao atualizar sua lista: ' + err.message, 'erro');
   } finally {
     mostrarCarregando(false);
   }
