@@ -785,10 +785,10 @@ function renderizarDashboard() {
     return `
       <section class="border-t border-banca-muted/15 dark:border-banca-mutedDark/15 pt-6 pb-2">
         <div class="flex items-baseline justify-between mb-2 gap-3">
-          <div class="min-w-0">
-            <h2 class="font-serif text-2xl truncate inline-flex items-center gap-2">
-              ${escapeHtmlPlano(concurso.nome)}
-              ${!concurso.compartilhado ? '<span class="text-[11px] font-sans font-normal px-1.5 py-0.5 rounded border border-banca-muted/30 dark:border-banca-mutedDark/30 text-banca-muted dark:text-banca-mutedDark align-middle">privado</span>' : ''}
+          <div class="min-w-0 flex-1">
+            <h2 class="font-serif text-2xl flex items-center gap-2 min-w-0">
+              <span class="truncate">${escapeHtmlPlano(concurso.nome)}</span>
+              ${!concurso.compartilhado ? '<span class="shrink-0 text-[11px] font-sans font-normal px-1.5 py-0.5 rounded border border-banca-muted/30 dark:border-banca-mutedDark/30 text-banca-muted dark:text-banca-mutedDark">privado</span>' : ''}
             </h2>
             ${concurso.descricao ? `<p class="text-sm text-banca-muted dark:text-banca-mutedDark">${escapeHtmlPlano(concurso.descricao)}</p>` : ''}
           </div>
