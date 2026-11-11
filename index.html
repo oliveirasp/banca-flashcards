@@ -376,6 +376,11 @@
       <button id="btn-processar-texto" class="botao-secundario mt-2 text-sm">Processar texto</button>
     </div>
 
+    <label class="flex items-center gap-2 text-sm mt-4">
+      <input type="checkbox" id="imp-privado">
+      Criar concurso/matérias novas como privadas (só eu vejo)
+    </label>
+
     <div id="imp-destino-2col" class="hidden mt-4 grid grid-cols-2 gap-3">
       <div>
         <label class="block text-xs mb-1 text-banca-muted dark:text-banca-mutedDark">Concurso de destino</label>
@@ -1200,6 +1205,7 @@ $('#btn-importar').addEventListener('click', () => {
   $('#imp-destino-2col').classList.add('hidden');
   $('#imp-progresso').classList.add('hidden');
   $('#imp-progresso').textContent = '';
+  $('#imp-privado').checked = false;
   $('#btn-confirmar-importar').disabled = true;
   $('#imp-concurso').innerHTML = estado.concursos.map(c => `<option value="${c.id}">${escapeHtmlPlano(c.nome)}</option>`).join('');
   atualizarSelectBaralhosImportacao();
@@ -1259,9 +1265,10 @@ function processarLinhasCsv(linhasBrutas) {
 
   const processadas = dados.map(linha => {
     if (formato === '4col') {
-      const [concursoNome, materiaNome, frente, verso] = linha;
+      const [concursoNome, materiaNome, frente, verso, pesoStr] = linha;
       const tipo = ehCloze(frente) ? 'cloze' : (['certo', 'errado'].includes(String(verso || '').trim().toLowerCase()) ? 'certo_errado' : 'padrao');
-      return { concursoNome: (concursoNome || '').trim(), materiaNome: (materiaNome || '').trim(), frente: (frente || '').trim(), verso: (verso || '').trim(), tipo };
+      const peso = pesoStr ? Math.max(1, parseInt(pesoStr, 10) || 1) : 1;
+      return { concursoNome: (concursoNome || '').trim(), materiaNome: (materiaNome || '').trim(), frente: (frente || '').trim(), verso: (verso || '').trim(), tipo, peso };
     } else {
       const [frente, verso] = linha;
       const tipo = ehCloze(frente) ? 'cloze' : (['certo', 'errado'].includes(String(verso || '').trim().toLowerCase()) ? 'certo_errado' : 'padrao');
@@ -1306,6 +1313,7 @@ $('#btn-confirmar-importar').addEventListener('click', async () => {
   $('#btn-confirmar-importar').disabled = true;
   mostrarCarregando(true);
   try {
+    const privado = $('#imp-privado').checked;
     let cartoesParaInserir = [];
     if (formato === '4col') {
       const cacheConcursos = new Map(estado.concursos.map(c => [c.nome.trim().toLowerCase(), c]));
@@ -1314,7 +1322,7 @@ $('#btn-confirmar-importar').addEventListener('click', async () => {
         const chaveConcurso = l.concursoNome.toLowerCase();
         let concurso = cacheConcursos.get(chaveConcurso);
         if (!concurso) {
-          const { data, error } = await supabaseClient.from('concursos').insert({ nome: l.concursoNome, criado_por: estado.usuario.id }).select().single();
+          const { data, error } = await supabaseClient.from('concursos').insert({ nome: l.concursoNome, compartilhado: !privado, criado_por: estado.usuario.id }).select().single();
           if (error) throw error;
           concurso = data;
           cacheConcursos.set(chaveConcurso, concurso);
@@ -1323,7 +1331,7 @@ $('#btn-confirmar-importar').addEventListener('click', async () => {
         const chaveBaralho = `${concurso.id}::${l.materiaNome.toLowerCase()}`;
         let baralho = cacheBaralhos.get(chaveBaralho);
         if (!baralho) {
-          const { data, error } = await supabaseClient.from('baralhos').insert({ concurso_id: concurso.id, titulo: l.materiaNome, compartilhado: true, criado_por: estado.usuario.id }).select().single();
+          const { data, error } = await supabaseClient.from('baralhos').insert({ concurso_id: concurso.id, titulo: l.materiaNome, compartilhado: !privado, peso: l.peso || 1, criado_por: estado.usuario.id }).select().single();
           if (error) throw error;
           baralho = data;
           cacheBaralhos.set(chaveBaralho, baralho);
