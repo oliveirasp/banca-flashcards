@@ -1019,13 +1019,15 @@ async function iniciarEstudo(baralhoId) {
       if (!p) novos.push(c);
       else if (new Date(p.proxima_revisao) <= agora) vencidos.push(c);
     }
-    const fila = [...vencidos, ...novos.slice(0, LIMITE_NOVOS_POR_SESSAO)].map(c => ({
+    let fila = [...vencidos, ...novos.slice(0, LIMITE_NOVOS_POR_SESSAO)].map(c => ({
       cartao: c,
       progresso: progressoPorCartao.get(c.id) || estadoProgressoPadrao(),
     }));
     if (!fila.length) {
-      mostrarToast('Nada para revisar por aqui agora. Volte mais tarde!', 'ok');
-      return;
+      if (!cartoesBaralho.length) { mostrarToast('Esta matéria ainda não tem cartões.', 'erro'); return; }
+      const estudarMesmoAssim = window.confirm('Nada vencido por aqui agora. Quer estudar mesmo assim (revisão livre, sem esperar o agendamento)?');
+      if (!estudarMesmoAssim) return;
+      fila = embaralhar(cartoesBaralho.slice()).map(c => ({ cartao: c, progresso: progressoPorCartao.get(c.id) || estadoProgressoPadrao() }));
     }
     estado.estudo = { baralhoId, fila, indice: 0, virado: false, stats: { 1: 0, 2: 0, 3: 0, 4: 0 } };
     $('#estudo-corpo').classList.remove('hidden');
@@ -1103,14 +1105,20 @@ async function iniciarEstudoConcurso(concursoId) {
     for (const lista of novosPorBaralho.values()) embaralhar(lista);
     const novosSelecionados = distribuirNovosPorPeso(novosPorBaralho, baralhoPorId, LIMITE_NOVOS_POR_SESSAO);
     embaralhar(novosSelecionados);
-    const fila = [...vencidos, ...novosSelecionados].map(c => ({
+    let fila = [...vencidos, ...novosSelecionados].map(c => ({
       cartao: c,
       progresso: progressoPorCartao.get(c.id) || estadoProgressoPadrao(),
       baralhoTitulo: (baralhoPorId.get(c.baralho_id) || {}).titulo || '',
     }));
     if (!fila.length) {
-      mostrarToast('Nada para revisar por aqui agora. Volte mais tarde!', 'ok');
-      return;
+      if (!cartoesDoConcurso.length) { mostrarToast('Este concurso ainda não tem cartões.', 'erro'); return; }
+      const estudarMesmoAssim = window.confirm('Nada vencido por aqui agora. Quer estudar mesmo assim (revisão livre, sem esperar o agendamento)?');
+      if (!estudarMesmoAssim) return;
+      fila = embaralhar(cartoesDoConcurso.slice()).map(c => ({
+        cartao: c,
+        progresso: progressoPorCartao.get(c.id) || estadoProgressoPadrao(),
+        baralhoTitulo: (baralhoPorId.get(c.baralho_id) || {}).titulo || '',
+      }));
     }
     estado.estudo = { concursoId, fila, indice: 0, virado: false, stats: { 1: 0, 2: 0, 3: 0, 4: 0 } };
     $('#estudo-corpo').classList.remove('hidden');
@@ -1152,7 +1160,10 @@ function renderizarCartaoAtual() {
   const imgVerso = item.cartao.imagem_verso_url
     ? `<div class="inline-block bg-white p-2 rounded-lg shadow-sm mb-3"><img src="${escapeHtmlPlano(item.cartao.imagem_verso_url)}" alt="" class="max-h-36 max-w-full object-contain rounded"></div><br>` : '';
   const modoVerso = item.cartao.tipo === 'cloze' ? 'verso' : null;
-  $('#conteudo-verso').innerHTML = imgVerso + renderCampo(item.cartao.verso, modoVerso);
+  const perguntaRelembrada = item.cartao.tipo !== 'cloze'
+    ? `<p class="text-sm text-banca-muted dark:text-banca-mutedDark mb-2 pb-2 border-b border-banca-muted/15 dark:border-banca-mutedDark/15">${renderCampo(item.cartao.frente, null)}</p>`
+    : '';
+  $('#conteudo-verso').innerHTML = perguntaRelembrada + imgVerso + renderCampo(item.cartao.verso, modoVerso);
   $('#campo-anotacao').value = item.progresso.anotacao_pessoal || '';
 }
 
