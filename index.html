@@ -1270,7 +1270,7 @@ document.addEventListener('keydown', (e) => {
 // IMPORTADOR DE CSV
 // ======================================================================
 $('#btn-logo-home').addEventListener('click', () => {
-  if (estado.estudo) return; // não sai de sessão de estudo em andamento sem usar "Encerrar sessão"
+  estado.estudo = null;
   mostrarView('dashboard');
   carregarDashboard();
 });
